@@ -40,6 +40,9 @@ local branch.
 npm test
 ```
 
+Architecture notes live in [docs/adr](docs/adr/), starting with
+[ADR 0001: Conductor Workspace Registration Model](docs/adr/0001-conductor-workspace-registration.md).
+
 ## Current Conductor Discovery Result
 
 Tested on 2026-06-27 with:
