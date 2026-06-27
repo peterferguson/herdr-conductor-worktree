@@ -165,10 +165,29 @@ Focused workspace row diff:
 
 ```diff
 - archive_commit: null
-+ archive_commit: 8ae6f3e1e8e91e1c8d3a8bea2d6fd81c6ac5d35e
++ archive_commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 - state: ready
 + state: archived
 ```
+
+## Compatibility Notes
+
+After a later restart, Conductor reported app version `0.70.0` with migration
+`114`:
+
+```text
+114 track owning organization for cloud workspaces
+```
+
+That migration adds nullable `workspaces.organization_id` and an index. The
+existing registration fields used by this plugin are unchanged, so the plugin
+treats `0.70.0` / migration `114` as compatible with the `0.69.1` / migration
+`113` baseline.
+
+Conductor did not display a directly inserted workspace until the app was
+restarted. Treat this as expected behavior for now: direct database writes are
+valid durable state, but Conductor does not appear to live-reload all workspace
+list state from SQLite.
 
 ## Implementation Guidance
 
@@ -188,6 +207,9 @@ When adding registration support to this plugin:
 - Create the Git worktree before inserting the Conductor rows.
 - Do not pre-create local-storage cache files unless a later probe proves this
   is required.
+- Tell users to restart Conductor if the workspace does not appear immediately.
+  The CLI may offer an explicit restart flag, but should not restart Conductor
+  by default.
 
 When adding archive support to this plugin:
 
