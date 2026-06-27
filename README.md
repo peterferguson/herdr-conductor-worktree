@@ -153,14 +153,14 @@ Tested on 2026-06-27 with:
 ```bash
 node index.mjs create \
   --cwd /path/to/herdr-conductor-worktree \
-  --slug external-discovery-trial
+  --slug trial-workspace
 ```
 
 Result:
 
-- Herdr created workspace `w4`.
+- Herdr created a workspace.
 - Git registered a linked worktree at
-  `~/conductor/workspaces/herdr-conductor-worktree/external-discovery-trial`.
+  `~/conductor/workspaces/herdr-conductor-worktree/trial-workspace`.
 - Conductor did not auto-register the repo or workspace in
   `~/Library/Application Support/com.conductor.app/conductor.db`, even after
   launching/focusing Conductor.

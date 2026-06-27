@@ -35,8 +35,8 @@ Conductor version: 0.69.1
 Snapshot artifacts:
 
 ```text
-/tmp/conductor-diff-before-20260627-125009
-/tmp/conductor-diff-after-20260627-125633
+/tmp/conductor-diff-before-<timestamp>
+/tmp/conductor-diff-after-<timestamp>
 ```
 
 The versioned schema snapshot for this probe is:
@@ -89,7 +89,7 @@ Conductor reused an existing repo row:
 id: 11111111-1111-4111-8111-111111111111
 name: example-repo
 root_path: /path/to/repos/example-repo
-remote_url: git@github.com:example/example-repo.git
+remote_url: https://github.com/example/example-repo.git
 default_branch: develop
 remote: origin
 storage_version: 3
@@ -141,8 +141,8 @@ We archived the `user/trial-workspace` workspace in Conductor and captured focus
 snapshots:
 
 ```text
-/tmp/conductor-archive-before-trial-workspace-20260627-130411
-/tmp/conductor-archive-after-trial-workspace-20260627-130522
+/tmp/conductor-archive-before-trial-workspace-<timestamp>
+/tmp/conductor-archive-after-trial-workspace-<timestamp>
 ```
 
 Observed archive effects:
