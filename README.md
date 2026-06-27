@@ -42,6 +42,8 @@ npm test
 
 Architecture notes live in [docs/adr](docs/adr/), starting with
 [ADR 0001: Conductor Workspace Registration Model](docs/adr/0001-conductor-workspace-registration.md).
+The captured Conductor `0.69.1` schema snapshot lives in
+[docs/conductor/conductor-0.69.1-2026-06-27-schema.md](docs/conductor/conductor-0.69.1-2026-06-27-schema.md).
 
 ## Current Conductor Discovery Result
 

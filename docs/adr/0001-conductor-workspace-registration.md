@@ -38,6 +38,12 @@ Snapshot artifacts:
 /tmp/conductor-diff-after-20260627-125633
 ```
 
+The versioned schema snapshot for this probe is:
+
+```text
+docs/conductor/conductor-0.69.1-2026-06-27-schema.md
+```
+
 Conductor durable state was observed in:
 
 ```text
