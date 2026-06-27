@@ -4,8 +4,12 @@
   "private": true,
   "type": "module",
   "description": "Herdr plugin for creating Conductor-shaped Git worktrees.",
+  "bin": {
+    "herdr-conductor-worktree": "dist/index.js"
+  },
   "scripts": {
-    "test": "node --test",
+    "build": "bun build src/index.ts --target=node --format=esm --outfile=dist/index.js && chmod +x dist/index.js",
+    "test": "npm run build && node --test",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "changeset publish"

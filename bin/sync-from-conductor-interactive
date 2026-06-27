@@ -2,5 +2,4 @@
 set -eu
 
 PLUGIN_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-cd "$PLUGIN_DIR"
-exec node index.mjs sync-from-conductor --interactive
+exec "$PLUGIN_DIR/dist/index.js" sync-from-conductor --interactive

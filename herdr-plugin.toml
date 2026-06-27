@@ -9,16 +9,16 @@ platforms = ["linux", "macos"]
 id = "create"
 title = "Create Conductor workspace"
 contexts = ["pane", "workspace"]
-command = ["node", "index.mjs", "create"]
+command = ["./dist/index.js", "create"]
 
 [[actions]]
 id = "create-registered"
 title = "Create registered Conductor workspace"
 contexts = ["pane", "workspace"]
-command = ["node", "index.mjs", "create", "--register-conductor"]
+command = ["./dist/index.js", "create", "--register-conductor"]
 
 [[actions]]
 id = "sync-from-conductor"
 title = "Sync Conductor workspaces"
 contexts = ["pane", "workspace"]
-command = ["node", "index.mjs", "sync-from-conductor", "--interactive"]
+command = ["./dist/index.js", "sync-from-conductor", "--interactive"]

@@ -12,16 +12,126 @@ const SUPPORTED_CONDUCTOR_BASELINES = [
 ];
 const DEFAULT_SESSION_MODEL = "opus-4-8-1m";
 
-function log(message) {
+type Command = "create" | "archive" | "sync-from-conductor" | undefined;
+
+interface CliArgs {
+  command: Command;
+  cwd?: string;
+  workspaceId?: string;
+  branch?: string;
+  slug?: string;
+  conductorRoot: string;
+  conductorApp: string;
+  conductorDb: string;
+  repoId?: string;
+  sessionModel: string;
+  dryRun: boolean;
+  registerConductor: boolean;
+  restartConductor: boolean;
+  interactive: boolean;
+  openNew: boolean;
+  removeArchived: boolean;
+  unsafeConductorVersion: boolean;
+  force: boolean;
+}
+
+interface RunResult {
+  ok: boolean;
+  out: string;
+  err: string;
+  status: number | null;
+}
+
+interface ConductorSettings {
+  clientInstanceId: string;
+  branchPrefixType: string;
+  branchPrefixCustom: string;
+  deleteBranchOnArchive: boolean;
+}
+
+interface ConductorRepoRow {
+  id: string;
+  name: string;
+  root_path: string;
+  remote_url?: string;
+  default_branch?: string;
+  remote?: string;
+}
+
+interface ConductorEnvironment {
+  dbPath: string;
+  appVersion: string;
+  migration: {
+    maxVersion: number;
+    count: number;
+  };
+  settings: ConductorSettings;
+}
+
+interface RegistrationWorkspace {
+  id: string;
+  repository_id: string;
+  directory_name: string;
+  active_session_id: string;
+  branch: string;
+  workspace_path: string;
+  creator_client_id: string;
+  [key: string]: string | number | null;
+}
+
+interface RegistrationSession {
+  id: string;
+  status: string;
+  model: string;
+  permission_mode: string;
+  workspace_id: string;
+  is_hidden: number;
+  [key: string]: string | number;
+}
+
+interface ConductorWorkspaceRow {
+  id: string;
+  repository_id?: string;
+  repo_name: string;
+  repo_root: string;
+  directory_name: string;
+  branch?: string;
+  state: string;
+  updated_at?: string;
+  workspace_path: string;
+  archive_commit?: string | null;
+}
+
+interface HerdrWorkspace {
+  workspace_id: string;
+  worktree?: {
+    checkout_path?: string;
+  };
+}
+
+type SyncWorkspace = ConductorWorkspaceRow & {
+  herdrWorkspace?: HerdrWorkspace;
+};
+
+interface SyncPlan {
+  newConductorWorkspaces: SyncWorkspace[];
+  archivedHerdrWorkspaces: SyncWorkspace[];
+}
+
+type SyncCandidate =
+  | { action: "open"; workspace: SyncWorkspace }
+  | { action: "remove"; workspace: SyncWorkspace };
+
+function log(message: string) {
   process.stdout.write(`${TAG} ${message}\n`);
 }
 
-function die(message) {
+function die(message: string): never {
   process.stderr.write(`${TAG} error: ${message}\n`);
   process.exit(1);
 }
 
-export function slugify(value) {
+export function slugify(value: unknown): string {
   const slug = String(value)
     .trim()
     .toLowerCase()
@@ -31,8 +141,8 @@ export function slugify(value) {
   return slug || "workspace";
 }
 
-export function timestampSlug(date = new Date()) {
-  const pad = (n) => String(n).padStart(2, "0");
+export function timestampSlug(date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
   const stamp = [
     date.getFullYear(),
     pad(date.getMonth() + 1),
@@ -42,29 +152,29 @@ export function timestampSlug(date = new Date()) {
   return `herdr-test-${stamp}-${time}`;
 }
 
-export function expandHome(path) {
+export function expandHome(path: string): string {
   if (path === "~") return homedir();
   if (path.startsWith("~/")) return join(homedir(), path.slice(2));
   return path;
 }
 
-export function parseBranchPrefix(settingsToml) {
+export function parseBranchPrefix(settingsToml: string): string {
   const match = settingsToml.match(/^\s*branch_prefix\s*=\s*"([^"]*)"\s*$/m);
   return match ? match[1] : "";
 }
 
-export function readConductorBranchPrefix(settingsPath = join(homedir(), ".conductor", "settings.toml")) {
+export function readConductorBranchPrefix(settingsPath = join(homedir(), ".conductor", "settings.toml")): string {
   if (!existsSync(settingsPath)) return "";
   return parseBranchPrefix(readFileSync(settingsPath, "utf8"));
 }
 
-export function conductorPath(repoRoot, workspaceSlug, conductorRoot = "~/conductor/workspaces") {
+export function conductorPath(repoRoot: string, workspaceSlug: string, conductorRoot = "~/conductor/workspaces"): string {
   return resolve(expandHome(conductorRoot), basename(repoRoot), workspaceSlug);
 }
 
-export function parseArgs(argv) {
-  const args = {
-    command: argv[0],
+export function parseArgs(argv: string[]): CliArgs {
+  const args: CliArgs = {
+    command: argv[0] as Command,
     cwd: undefined,
     workspaceId: undefined,
     branch: undefined,
@@ -140,14 +250,14 @@ export function parseArgs(argv) {
   throw new Error(
     [
       "usage:",
-      "  index.mjs create [--cwd PATH] [--slug NAME] [--conductor-root PATH] [--dry-run] [--register-conductor] [--restart-conductor]",
-      "  index.mjs archive (--workspace-id ID | --cwd PATH | --branch NAME) [--force] [--restart-conductor]",
-      "  index.mjs sync-from-conductor [--interactive] [--open-new] [--remove-archived] [--dry-run]",
+      "  herdr-conductor-worktree create [--cwd PATH] [--slug NAME] [--conductor-root PATH] [--dry-run] [--register-conductor] [--restart-conductor]",
+      "  herdr-conductor-worktree archive (--workspace-id ID | --cwd PATH | --branch NAME) [--force] [--restart-conductor]",
+      "  herdr-conductor-worktree sync-from-conductor [--interactive] [--open-new] [--remove-archived] [--dry-run]",
     ].join("\n"),
   );
 }
 
-function pluginContext() {
+function pluginContext(): Record<string, string> {
   try {
     return JSON.parse(process.env.HERDR_PLUGIN_CONTEXT_JSON || "{}");
   } catch {
@@ -155,13 +265,13 @@ function pluginContext() {
   }
 }
 
-function sourceCwd(explicitCwd) {
+function sourceCwd(explicitCwd?: string): string {
   if (explicitCwd) return explicitCwd;
   const ctx = pluginContext();
   return ctx.focused_pane_cwd || ctx.workspace_cwd || process.cwd();
 }
 
-function run(command, args, options = {}) {
+function run(command: string, args: string[], options: { cwd?: string; timeout?: number } = {}): RunResult {
   const result = spawnSync(command, args, {
     cwd: options.cwd,
     encoding: "utf8",
@@ -184,11 +294,11 @@ function run(command, args, options = {}) {
   };
 }
 
-function git(cwd, ...args) {
+function git(cwd: string, ...args: string[]): RunResult {
   return run("git", ["-C", cwd, ...args]);
 }
 
-function repoRoot(cwd) {
+function repoRoot(cwd: string): string {
   const result = git(cwd, "rev-parse", "--show-toplevel");
   if (!result.ok || !result.out) {
     die(`${cwd} is not inside a Git repository`);
@@ -196,20 +306,32 @@ function repoRoot(cwd) {
   return result.out;
 }
 
-function branchExists(repo, branch) {
+function branchExists(repo: string, branch: string): boolean {
   return git(repo, "show-ref", "--verify", "--quiet", `refs/heads/${branch}`).ok;
 }
 
-function worktreeIsClean(worktreePath) {
+function worktreeIsClean(worktreePath: string): boolean {
   const result = git(worktreePath, "status", "--porcelain");
   return result.ok && result.out === "";
 }
 
-function herdrBin() {
+function herdrBin(): string {
   return process.env.HERDR_BIN_PATH || "herdr";
 }
 
-function createWorktree({ repo, slug, branch, targetPath, dryRun }) {
+function createWorktree({
+  repo,
+  slug,
+  branch,
+  targetPath,
+  dryRun,
+}: {
+  repo: string;
+  slug: string;
+  branch: string;
+  targetPath: string;
+  dryRun: boolean;
+}): void {
   const command = [
     "worktree",
     "create",
@@ -240,23 +362,23 @@ function createWorktree({ repo, slug, branch, targetPath, dryRun }) {
   }
 }
 
-export function defaultConductorDbPath() {
+export function defaultConductorDbPath(): string {
   return join(homedir(), "Library", "Application Support", "com.conductor.app", "conductor.db");
 }
 
-function conductorSupportDir(dbPath) {
+function conductorSupportDir(dbPath: string): string {
   return dirname(dbPath);
 }
 
-function backupDirForDb(dbPath) {
+function backupDirForDb(dbPath: string): string {
   return join(conductorSupportDir(dbPath), "backups", "herdr-conductor-worktree");
 }
 
-export function parseConductorVersion(output) {
+export function parseConductorVersion(output: unknown): string {
   return String(output).trim();
 }
 
-function readConductorAppVersion(appPath) {
+function readConductorAppVersion(appPath: string): string {
   const plistPath = join(appPath, "Contents", "Info.plist");
   const result = run("plutil", ["-extract", "CFBundleShortVersionString", "raw", "-o", "-", plistPath]);
   if (!result.ok) {
@@ -265,7 +387,7 @@ function readConductorAppVersion(appPath) {
   return parseConductorVersion(result.out);
 }
 
-function sqlite(dbPath, sql, options = {}) {
+function sqlite(dbPath: string, sql: string, options: { json?: boolean; header?: boolean } = {}): string {
   const args = [];
   if (options.json) args.push("-json");
   if (options.header) args.push("-header");
@@ -277,7 +399,7 @@ function sqlite(dbPath, sql, options = {}) {
   return result.out;
 }
 
-function sqliteJson(dbPath, sql) {
+function sqliteJson<T = Record<string, unknown>>(dbPath: string, sql: string): T[] {
   const out = sqlite(dbPath, sql, { json: true });
   if (!out) return [];
   try {
@@ -287,7 +409,7 @@ function sqliteJson(dbPath, sql) {
   }
 }
 
-function readMigrationWatermark(dbPath) {
+function readMigrationWatermark(dbPath: string): { maxVersion: number; count: number } {
   const rows = sqliteJson(
     dbPath,
     "select max(version) as max_version, count(*) as migration_count from _sqlx_migrations;",
@@ -299,7 +421,15 @@ function readMigrationWatermark(dbPath) {
   };
 }
 
-export function assertConductorCompatibility({ appVersion, migrationMax, unsafe }) {
+export function assertConductorCompatibility({
+  appVersion,
+  migrationMax,
+  unsafe,
+}: {
+  appVersion: string;
+  migrationMax: number;
+  unsafe: boolean;
+}): void {
   if (unsafe) return;
   const supported = SUPPORTED_CONDUCTOR_BASELINES.some(
     (baseline) => baseline.appVersion === appVersion && baseline.migrationMax === migrationMax,
@@ -315,13 +445,13 @@ export function assertConductorCompatibility({ appVersion, migrationMax, unsafe 
   }
 }
 
-function formatSupportedBaselines() {
+function formatSupportedBaselines(): string {
   return SUPPORTED_CONDUCTOR_BASELINES.map(
     (baseline) => `app ${baseline.appVersion}, migration ${baseline.migrationMax}`,
   ).join(" or ");
 }
 
-export function parseConductorSettings(rows) {
+export function parseConductorSettings(rows: Array<{ key: string; value: unknown }>): ConductorSettings {
   const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
   return {
     clientInstanceId: values.client_instance_id || "",
@@ -331,13 +461,13 @@ export function parseConductorSettings(rows) {
   };
 }
 
-function parseBooleanSetting(value) {
+function parseBooleanSetting(value: unknown): boolean {
   if (value === true || value === 1) return true;
   const normalized = String(value ?? "").trim().toLowerCase();
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 
-function readConductorSettings(dbPath) {
+function readConductorSettings(dbPath: string): ConductorSettings {
   return parseConductorSettings(
     sqliteJson(
       dbPath,
@@ -353,12 +483,12 @@ function readConductorSettings(dbPath) {
   );
 }
 
-function conductorBranchPrefix(settings) {
+function conductorBranchPrefix(settings: ConductorSettings): string {
   if (settings.branchPrefixType === "custom") return settings.branchPrefixCustom || "";
   return "";
 }
 
-function loadConductorEnvironment(args) {
+function loadConductorEnvironment(args: CliArgs): ConductorEnvironment {
   const dbPath = resolve(expandHome(args.conductorDb));
   if (!existsSync(dbPath)) {
     die(`Conductor DB not found: ${dbPath}`);
@@ -388,14 +518,14 @@ function loadConductorEnvironment(args) {
   };
 }
 
-function readRepoRows(dbPath, rootPath) {
-  return sqliteJson(
+function readRepoRows(dbPath: string, rootPath: string): ConductorRepoRow[] {
+  return sqliteJson<ConductorRepoRow>(
     dbPath,
     `select id, name, root_path, remote_url, default_branch, remote from repos where root_path = ${sqlValue(rootPath)};`,
   );
 }
 
-export function chooseConductorRepo(rows, rootPath, repoId) {
+export function chooseConductorRepo(rows: ConductorRepoRow[], rootPath: string, repoId?: string): ConductorRepoRow {
   if (repoId) {
     const match = rows.find((row) => row.id === repoId);
     if (!match) {
@@ -416,7 +546,7 @@ export function chooseConductorRepo(rows, rootPath, repoId) {
   throw new Error(`multiple Conductor repo rows match ${rootPath}; pass --repo-id. Matches: ${choices}`);
 }
 
-function loadConductorRepo(dbPath, repoRootPath, repoId) {
+function loadConductorRepo(dbPath: string, repoRootPath: string, repoId?: string): ConductorRepoRow {
   try {
     return chooseConductorRepo(readRepoRows(dbPath, repoRootPath), repoRootPath, repoId);
   } catch (error) {
@@ -424,7 +554,7 @@ function loadConductorRepo(dbPath, repoRootPath, repoId) {
   }
 }
 
-function backupConductorDb(dbPath) {
+function backupConductorDb(dbPath: string): string {
   const backupDir = backupDirForDb(dbPath);
   mkdirSync(backupDir, { recursive: true });
   const backupPath = join(backupDir, `conductor-${backupTimestamp()}.db`);
@@ -437,7 +567,7 @@ function backupConductorDb(dbPath) {
   return backupPath;
 }
 
-function copyConductorDbFiles(dbPath, backupPath, backupError) {
+function copyConductorDbFiles(dbPath: string, backupPath: string, backupError: string): string {
   try {
     copyFileSync(dbPath, backupPath);
     for (const suffix of ["-wal", "-shm"]) {
@@ -453,8 +583,8 @@ function copyConductorDbFiles(dbPath, backupPath, backupError) {
   return backupPath;
 }
 
-function backupTimestamp(date = new Date()) {
-  const pad = (n) => String(n).padStart(2, "0");
+function backupTimestamp(date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
   return [
     date.getFullYear(),
     pad(date.getMonth() + 1),
@@ -466,25 +596,31 @@ function backupTimestamp(date = new Date()) {
   ].join("");
 }
 
-function sqlValue(value) {
+function sqlValue(value: unknown): string {
   if (value === null || value === undefined) return "null";
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : "null";
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
-function sqlAssignments(values) {
+function sqlAssignments(values: Record<string, unknown>): string {
   return Object.entries(values)
     .map(([key, value]) => `${key} = ${sqlValue(value)}`)
     .join(", ");
 }
 
-function insertSql(table, values) {
+function insertSql(table: string, values: Record<string, unknown>): string {
   const columns = Object.keys(values).join(", ");
   const sqlValues = Object.values(values).map(sqlValue).join(", ");
   return `insert into ${table} (${columns}) values (${sqlValues});`;
 }
 
-export function buildConductorRegistrationSql({ workspace, session }) {
+export function buildConductorRegistrationSql({
+  workspace,
+  session,
+}: {
+  workspace: RegistrationWorkspace;
+  session: RegistrationSession;
+}): string {
   return [
     "begin;",
     insertSql("sessions", session),
@@ -493,7 +629,13 @@ export function buildConductorRegistrationSql({ workspace, session }) {
   ].join("\n");
 }
 
-export function buildConductorArchiveSql({ workspaceId, archiveCommit }) {
+export function buildConductorArchiveSql({
+  workspaceId,
+  archiveCommit,
+}: {
+  workspaceId: string;
+  archiveCommit: string;
+}): string {
   return [
     "begin;",
     `update workspaces set ${sqlAssignments({ state: "archived", archive_commit: archiveCommit })} where id = ${sqlValue(workspaceId)};`,
@@ -501,7 +643,21 @@ export function buildConductorArchiveSql({ workspaceId, archiveCommit }) {
   ].join("\n");
 }
 
-function registerConductorWorkspace({ env, repoRow, slug, branch, targetPath, sessionModel }) {
+function registerConductorWorkspace({
+  env,
+  repoRow,
+  slug,
+  branch,
+  targetPath,
+  sessionModel,
+}: {
+  env: ConductorEnvironment;
+  repoRow: ConductorRepoRow;
+  slug: string;
+  branch: string;
+  targetPath: string;
+  sessionModel: string;
+}): void {
   const workspaceId = randomUUID();
   const sessionId = randomUUID();
   const workspace = {
@@ -558,7 +714,7 @@ function registerConductorWorkspace({ env, repoRow, slug, branch, targetPath, se
   log("restart Conductor if the workspace does not appear immediately");
 }
 
-function restartConductorApp() {
+function restartConductorApp(): void {
   if (process.platform !== "darwin") {
     die("--restart-conductor is currently only supported on macOS");
   }
@@ -582,7 +738,7 @@ function restartConductorApp() {
   log("restarted Conductor");
 }
 
-function herdrWorkspaceList() {
+function herdrWorkspaceList(): HerdrWorkspace[] {
   const result = run(herdrBin(), ["workspace", "list"]);
   if (!result.ok) {
     die(`herdr workspace list failed: ${result.err || result.out}`);
@@ -594,8 +750,8 @@ function herdrWorkspaceList() {
   }
 }
 
-function readConductorSyncWorkspaces(env) {
-  return sqliteJson(
+function readConductorSyncWorkspaces(env: ConductorEnvironment): ConductorWorkspaceRow[] {
+  return sqliteJson<ConductorWorkspaceRow>(
     env.dbPath,
     [
       "select w.id, w.repository_id, w.directory_name, w.branch, w.state, w.updated_at, ",
@@ -610,19 +766,27 @@ function readConductorSyncWorkspaces(env) {
   );
 }
 
-function pathKey(path) {
+function pathKey(path: string): string {
   return resolve(expandHome(path));
 }
 
-function isUnderPath(path, root) {
+function isUnderPath(path: string, root: string): boolean {
   const resolvedPath = pathKey(path);
   const resolvedRoot = pathKey(root);
   return resolvedPath === resolvedRoot || resolvedPath.startsWith(`${resolvedRoot}/`);
 }
 
-export function planConductorSync({ conductorWorkspaces, herdrWorkspaces, conductorRoot }) {
+export function planConductorSync({
+  conductorWorkspaces,
+  herdrWorkspaces,
+  conductorRoot,
+}: {
+  conductorWorkspaces: ConductorWorkspaceRow[];
+  herdrWorkspaces: HerdrWorkspace[];
+  conductorRoot: string;
+}): SyncPlan {
   const root = pathKey(conductorRoot);
-  const herdrByPath = new Map();
+  const herdrByPath = new Map<string, HerdrWorkspace>();
   for (const workspace of herdrWorkspaces) {
     const checkoutPath = workspace.worktree?.checkout_path;
     if (checkoutPath) {
@@ -649,7 +813,7 @@ export function planConductorSync({ conductorWorkspaces, herdrWorkspaces, conduc
   };
 }
 
-function printSyncPlan(plan) {
+function printSyncPlan(plan: SyncPlan): void {
   log(`new Conductor workspaces not open in Herdr: ${plan.newConductorWorkspaces.length}`);
   for (const workspace of plan.newConductorWorkspaces) {
     log(`  + ${formatSyncWorkspace(workspace)}`);
@@ -660,17 +824,17 @@ function printSyncPlan(plan) {
   }
 }
 
-function formatSyncWorkspace(workspace) {
+function formatSyncWorkspace(workspace: SyncWorkspace): string {
   return `${workspace.repo_name}/${workspace.directory_name} [${workspace.branch || "detached"}] ${workspace.workspace_path}`;
 }
 
-function formatSyncWorkspaceForMenu(workspace) {
+function formatSyncWorkspaceForMenu(workspace: SyncWorkspace): string {
   const repo = color(workspace.repo_name, "36;1");
   const branch = color(workspace.branch || "detached", "33;1");
   return `${repo}/${workspace.directory_name} [${branch}] ${workspace.workspace_path}`;
 }
 
-function openConductorWorkspaceInHerdr(workspace, { dryRun }) {
+function openConductorWorkspaceInHerdr(workspace: SyncWorkspace, { dryRun }: Pick<CliArgs, "dryRun">): void {
   const command = [
     "worktree",
     "open",
@@ -694,7 +858,10 @@ function openConductorWorkspaceInHerdr(workspace, { dryRun }) {
   log(`opened in Herdr: ${formatSyncWorkspace(workspace)}`);
 }
 
-function removeArchivedWorkspaceFromHerdr(workspace, { dryRun, force }) {
+function removeArchivedWorkspaceFromHerdr(
+  workspace: SyncWorkspace,
+  { dryRun, force }: Pick<CliArgs, "dryRun" | "force">,
+): void {
   const workspaceId = workspace.herdrWorkspace?.workspace_id;
   if (!workspaceId) {
     die(`missing Herdr workspace id for ${workspace.workspace_path}`);
@@ -713,24 +880,24 @@ function removeArchivedWorkspaceFromHerdr(workspace, { dryRun, force }) {
   log(`removed archived Herdr workspace: ${workspaceId} ${formatSyncWorkspace(workspace)}`);
 }
 
-export function buildSyncCandidates(plan) {
+export function buildSyncCandidates(plan: SyncPlan): SyncCandidate[] {
   return [
     ...plan.newConductorWorkspaces.map((workspace) => ({ action: "open", workspace })),
     ...plan.archivedHerdrWorkspaces.map((workspace) => ({ action: "remove", workspace })),
   ];
 }
 
-function formatSyncCandidate(candidate) {
+function formatSyncCandidate(candidate: SyncCandidate): string {
   const prefix = candidate.action === "open" ? "Open in Herdr" : "Remove archived from Herdr";
   return `${prefix}: ${formatSyncWorkspace(candidate.workspace)}`;
 }
 
-function color(text, code) {
+function color(text: string, code: string): string {
   if (!process.stdout.isTTY || process.env.NO_COLOR) return text;
   return `\x1b[${code}m${text}\x1b[0m`;
 }
 
-function formatSyncCandidateForMenu(candidate) {
+function formatSyncCandidateForMenu(candidate: SyncCandidate): string {
   const action =
     candidate.action === "open"
       ? color("Open in Herdr", "32;1")
@@ -738,13 +905,13 @@ function formatSyncCandidateForMenu(candidate) {
   return `${action}: ${formatSyncWorkspaceForMenu(candidate.workspace)}`;
 }
 
-function readRawKey(input) {
+function readRawKey(input: NodeJS.ReadStream): Promise<Buffer> {
   return new Promise((resolve) => {
     input.once("data", resolve);
   });
 }
 
-function renderMultiSelect(candidates, selected, cursor) {
+function renderMultiSelect(candidates: SyncCandidate[], selected: Set<number>, cursor: number): void {
   process.stdout.write("\x1b[2J\x1b[H");
   process.stdout.write("Sync Conductor Workspaces\n\n");
   process.stdout.write("Use Up/Down or j/k to move, Space to toggle, a to toggle all, Enter to apply, q to cancel.\n\n");
@@ -755,8 +922,8 @@ function renderMultiSelect(candidates, selected, cursor) {
   });
 }
 
-async function selectSyncCandidates(candidates) {
-  const selected = new Set();
+async function selectSyncCandidates(candidates: SyncCandidate[]): Promise<SyncCandidate[]> {
+  const selected = new Set<number>();
   let cursor = 0;
   const input = process.stdin;
   const output = process.stdout;
@@ -797,7 +964,7 @@ async function selectSyncCandidates(candidates) {
   }
 }
 
-async function applyInteractiveSync(plan, args) {
+async function applyInteractiveSync(plan: SyncPlan, args: CliArgs): Promise<void> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     log("interactive prompt is unavailable; rerun in a terminal or pass --open-new/--remove-archived");
     return;
@@ -828,7 +995,7 @@ async function applyInteractiveSync(plan, args) {
   }
 }
 
-async function syncFromConductorCommand(args) {
+async function syncFromConductorCommand(args: CliArgs): Promise<void> {
   const env = loadConductorEnvironment(args);
   const conductorWorkspaces = readConductorSyncWorkspaces(env);
   const herdrWorkspaces = herdrWorkspaceList();
@@ -863,7 +1030,7 @@ async function syncFromConductorCommand(args) {
   }
 }
 
-function readArchiveWorkspace(env, args) {
+function readArchiveWorkspace(env: ConductorEnvironment, args: CliArgs): ConductorWorkspaceRow {
   const where = [];
   if (args.workspaceId) where.push(`w.id = ${sqlValue(args.workspaceId)}`);
   if (args.cwd) where.push(`w.workspace_path = ${sqlValue(resolve(expandHome(args.cwd)))}`);
@@ -886,7 +1053,7 @@ function readArchiveWorkspace(env, args) {
   return rows[0];
 }
 
-function archiveConductorWorkspace(args) {
+function archiveConductorWorkspace(args: CliArgs): void {
   const env = loadConductorEnvironment(args);
   const workspace = readArchiveWorkspace(env, args);
   if (workspace.state === "archived") {
@@ -938,7 +1105,7 @@ function archiveConductorWorkspace(args) {
   log("restart Conductor if the archived state does not appear immediately");
 }
 
-function createCommand(args) {
+function createCommand(args: CliArgs): void {
   const repo = repoRoot(resolve(sourceCwd(args.cwd)));
   const slug = slugify(args.slug || timestampSlug());
   const env = args.registerConductor ? loadConductorEnvironment(args) : undefined;
@@ -980,7 +1147,7 @@ function createCommand(args) {
   }
 }
 
-async function main() {
+async function main(): Promise<void> {
   let args;
   try {
     args = parseArgs(process.argv.slice(2));

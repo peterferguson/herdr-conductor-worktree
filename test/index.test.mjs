@@ -15,7 +15,7 @@ import {
   planConductorSync,
   slugify,
   timestampSlug,
-} from "../index.mjs";
+} from "../dist/index.js";
 
 test("slugify normalizes names for branch and path usage", () => {
   assert.equal(slugify("  My Feature / V2!  "), "my-feature-v2");

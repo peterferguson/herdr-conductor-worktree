@@ -64,13 +64,13 @@ The interactive sync pane uses a multi-select list:
 For a terminal trial without relying on Herdr pane context:
 
 ```bash
-node index.mjs create --cwd /path/to/repo --slug herdr-test
+dist/index.js create --cwd /path/to/repo --slug herdr-test
 ```
 
 For an explicit registration trial:
 
 ```bash
-node index.mjs create \
+dist/index.js create \
   --cwd /path/to/repo \
   --slug herdr-test \
   --register-conductor
@@ -81,7 +81,7 @@ have the plugin quit and reopen Conductor after a successful registration on
 macOS, pass:
 
 ```bash
-node index.mjs create \
+dist/index.js create \
   --cwd /path/to/repo \
   --slug herdr-test \
   --register-conductor \
@@ -101,9 +101,9 @@ Conductor has changed, the command fails closed unless
 Archive a registered workspace from the terminal with one of:
 
 ```bash
-node index.mjs archive --workspace-id <id>
-node index.mjs archive --cwd /path/to/worktree
-node index.mjs archive --branch user/herdr-test
+dist/index.js archive --workspace-id <id>
+dist/index.js archive --cwd /path/to/worktree
+dist/index.js archive --branch user/herdr-test
 ```
 
 Archive refuses dirty worktrees unless `--force` is passed. It mirrors the
@@ -116,7 +116,7 @@ until restart.
 Sync from Conductor without prompts:
 
 ```bash
-node index.mjs sync-from-conductor --open-new --remove-archived
+dist/index.js sync-from-conductor --open-new --remove-archived
 ```
 
 The sync command reads Conductor `workspaces` rows under
@@ -137,9 +137,16 @@ refuses to overwrite an existing target directory or existing local branch.
 
 ## Development
 
+Requires Node.js 18+ at runtime and Bun for local builds.
+
 ```bash
+npm run build
 npm test
 ```
+
+The CLI source is TypeScript in [src/index.ts](src/index.ts). `npm run build`
+uses Bun to compile it into the executable [dist/index.js](dist/index.js),
+which is the entrypoint used by Herdr.
 
 Architecture notes live in [docs/adr](docs/adr/), starting with
 [ADR 0001: Conductor Workspace Registration Model](docs/adr/0001-conductor-workspace-registration.md).
@@ -151,7 +158,7 @@ The captured Conductor `0.69.1` schema snapshot lives in
 Tested on 2026-06-27 with:
 
 ```bash
-node index.mjs create \
+dist/index.js create \
   --cwd /path/to/herdr-conductor-worktree \
   --slug trial-workspace
 ```
