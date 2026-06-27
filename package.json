@@ -1,0 +1,13 @@
+{
+  "name": "herdr-conductor-worktree",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Herdr plugin for creating Conductor-shaped Git worktrees.",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,12 @@
+id = "peter.conductor-worktree"
+name = "Conductor Worktree"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+description = "Create Herdr worktrees under Conductor's workspace directory layout."
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "create"
+title = "Create Conductor workspace"
+contexts = ["pane", "workspace"]
+command = ["node", "index.mjs", "create"]
