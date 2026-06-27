@@ -42,6 +42,23 @@ npm test
 
 ## Current Conductor Discovery Result
 
-Not tested yet. The first trial should create a workspace and then check whether
-Conductor auto-discovers externally-created Git worktrees under
-`~/conductor/workspaces`.
+Tested on 2026-06-27 with:
+
+```bash
+node index.mjs create \
+  --cwd /Users/peterferguson/repos/herdr-plugins/herdr-conductor-worktree \
+  --slug herdr-conductor-trial-20260627
+```
+
+Result:
+
+- Herdr created workspace `w4`.
+- Git registered a linked worktree at
+  `/Users/peterferguson/conductor/workspaces/herdr-conductor-worktree/herdr-conductor-trial-20260627`.
+- Conductor did not auto-register the repo or workspace in
+  `~/Library/Application Support/com.conductor.app/conductor.db`, even after
+  launching/focusing Conductor.
+
+Conclusion: this plugin can create Conductor-shaped worktrees on disk, but
+Conductor does not appear to auto-discover externally-created worktrees as
+first-class app workspaces.
