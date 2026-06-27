@@ -183,3 +183,25 @@ local-storage.entries/git-service-workspace-changes-v1/<workspace-id>.json
 
 Current assumption: these are regenerated from database rows and Git state, and
 the plugin should not write them directly.
+
+## Archive Probe Notes
+
+Probe workspace:
+
+```text
+workspace_id: d9241250-7d2a-4681-9b2d-b20e4ed4a039
+branch: peter/windhoek
+workspace_path: /Users/peterferguson/conductor/workspaces/noise-platform/windhoek
+archive_commit: 8ae6f3e1e8e91e1c8d3a8bea2d6fd81c6ac5d35e
+```
+
+Archiving updated the existing `workspaces` row in place:
+
+```text
+state: ready -> archived
+archive_commit: null -> 8ae6f3e1e8e91e1c8d3a8bea2d6fd81c6ac5d35e
+```
+
+It did not remove the workspace row or its session row. It removed the Git
+worktree directory and, with `delete_branch_on_archive = true`, deleted the
+local branch.

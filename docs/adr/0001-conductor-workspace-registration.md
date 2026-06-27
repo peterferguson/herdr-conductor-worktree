@@ -134,6 +134,41 @@ feed_offset: -1
 No new `repos` row was inserted during the `windhoek` probe, because the repo
 already existed in Conductor.
 
+## Archive Behavior
+
+We archived the `peter/windhoek` workspace in Conductor and captured focused
+snapshots:
+
+```text
+/tmp/conductor-archive-before-windhoek-20260627-130411
+/tmp/conductor-archive-after-windhoek-20260627-130522
+```
+
+Observed archive effects:
+
+- The workspace directory was removed from disk:
+  `/Users/peterferguson/conductor/workspaces/noise-platform/windhoek`.
+- The Git worktree entry was removed from `git worktree list`.
+- The local branch `refs/heads/peter/windhoek` was deleted. This matches the
+  observed setting `delete_branch_on_archive = true`.
+- The `workspaces` row remained.
+- The `sessions` row remained unchanged.
+- `workspaces.state` changed from `ready` to `archived`.
+- `workspaces.archive_commit` was set to the archived worktree HEAD:
+  `8ae6f3e1e8e91e1c8d3a8bea2d6fd81c6ac5d35e`.
+- `workspaces.updated_at` did not change in this probe.
+- PR cache content was unchanged.
+- Workspace-changes cache content only changed `refreshedAt`.
+
+Focused workspace row diff:
+
+```diff
+- archive_commit: null
++ archive_commit: 8ae6f3e1e8e91e1c8d3a8bea2d6fd81c6ac5d35e
+- state: ready
++ state: archived
+```
+
 ## Implementation Guidance
 
 When adding registration support to this plugin:
@@ -152,6 +187,18 @@ When adding registration support to this plugin:
 - Create the Git worktree before inserting the Conductor rows.
 - Do not pre-create local-storage cache files unless a later probe proves this
   is required.
+
+When adding archive support to this plugin:
+
+- Capture the worktree HEAD before removing the worktree.
+- Remove the Git worktree.
+- Delete the local branch only when Conductor's `delete_branch_on_archive`
+  setting is true.
+- Preserve the `workspaces` and `sessions` rows.
+- Update `workspaces.state` to `archived`.
+- Set `workspaces.archive_commit` to the captured HEAD.
+- Do not delete local-storage cache files unless a later probe proves Conductor
+  does so in another scenario.
 
 For new repos, the likely minimum `repos` fields are:
 
