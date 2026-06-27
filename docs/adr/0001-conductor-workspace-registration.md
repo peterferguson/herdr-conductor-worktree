@@ -21,13 +21,14 @@ enough for Conductor. A Herdr-created worktree under the Conductor workspace
 directory did not appear in Conductor after launching/focusing the app.
 
 We then captured a before/after snapshot around a workspace created by
-Conductor itself. The probe workspace was:
+Conductor itself. The concrete local values below are anonymized examples from
+that probe:
 
 ```text
-repo root: /Users/peterferguson/repos/noise-platform
-workspace directory: windhoek
-branch: peter/windhoek
-workspace path: /Users/peterferguson/conductor/workspaces/noise-platform/windhoek
+repo root: /path/to/repos/example-repo
+workspace directory: trial-workspace
+branch: user/trial-workspace
+workspace path: /path/to/conductor/workspaces/example-repo/trial-workspace
 Conductor version: 0.69.1
 ```
 
@@ -82,13 +83,13 @@ discover a valid `repos` row before registering a workspace.
 
 ## Observed Rows
 
-Conductor reused the existing `noise-platform` repo row:
+Conductor reused an existing repo row:
 
 ```text
-id: 98a2098f-27f8-4e21-a72d-06f0b92e40f7
-name: noise-platform
-root_path: /Users/peterferguson/repos/noise-platform
-remote_url: git@github.com:noise-xyz/noise-platform.git
+id: 11111111-1111-4111-8111-111111111111
+name: example-repo
+root_path: /path/to/repos/example-repo
+remote_url: git@github.com:example/example-repo.git
 default_branch: develop
 remote: origin
 storage_version: 3
@@ -97,30 +98,30 @@ storage_version: 3
 Conductor inserted one workspace row:
 
 ```text
-id: d9241250-7d2a-4681-9b2d-b20e4ed4a039
-repository_id: 98a2098f-27f8-4e21-a72d-06f0b92e40f7
-directory_name: windhoek
-active_session_id: 4704b490-14b1-4812-acfd-cdc37e5a99bd
-branch: peter/windhoek
-placeholder_branch_name: peter/windhoek
+id: 22222222-2222-4222-8222-222222222222
+repository_id: 11111111-1111-4111-8111-111111111111
+directory_name: trial-workspace
+active_session_id: 33333333-3333-4333-8333-333333333333
+branch: user/trial-workspace
+placeholder_branch_name: user/trial-workspace
 state: ready
 initialization_parent_branch: develop
 initialization_files_copied: 5640
 intended_target_branch: develop
 derived_status: in-progress
-workspace_path: /Users/peterferguson/conductor/workspaces/noise-platform/windhoek
+workspace_path: /path/to/conductor/workspaces/example-repo/trial-workspace
 permission_level: write
-creator_client_id: cc11422c-dbd8-4f67-b929-82dced9261bb
+creator_client_id: 44444444-4444-4444-8444-444444444444
 ```
 
 Conductor inserted one session row:
 
 ```text
-id: 4704b490-14b1-4812-acfd-cdc37e5a99bd
+id: 33333333-3333-4333-8333-333333333333
 status: idle
 model: opus-4-8-1m
 permission_mode: plan
-workspace_id: d9241250-7d2a-4681-9b2d-b20e4ed4a039
+workspace_id: 22222222-2222-4222-8222-222222222222
 is_hidden: 0
 agent_type: claude
 title: Untitled
@@ -131,31 +132,31 @@ claude_effort_level: medium
 feed_offset: -1
 ```
 
-No new `repos` row was inserted during the `windhoek` probe, because the repo
+No new `repos` row was inserted during the probe, because the repo
 already existed in Conductor.
 
 ## Archive Behavior
 
-We archived the `peter/windhoek` workspace in Conductor and captured focused
+We archived the `user/trial-workspace` workspace in Conductor and captured focused
 snapshots:
 
 ```text
-/tmp/conductor-archive-before-windhoek-20260627-130411
-/tmp/conductor-archive-after-windhoek-20260627-130522
+/tmp/conductor-archive-before-trial-workspace-20260627-130411
+/tmp/conductor-archive-after-trial-workspace-20260627-130522
 ```
 
 Observed archive effects:
 
 - The workspace directory was removed from disk:
-  `/Users/peterferguson/conductor/workspaces/noise-platform/windhoek`.
+  `/path/to/conductor/workspaces/example-repo/trial-workspace`.
 - The Git worktree entry was removed from `git worktree list`.
-- The local branch `refs/heads/peter/windhoek` was deleted. This matches the
+- The local branch `refs/heads/user/trial-workspace` was deleted. This matches the
   observed setting `delete_branch_on_archive = true`.
 - The `workspaces` row remained.
 - The `sessions` row remained unchanged.
 - `workspaces.state` changed from `ready` to `archived`.
 - `workspaces.archive_commit` was set to the archived worktree HEAD:
-  `8ae6f3e1e8e91e1c8d3a8bea2d6fd81c6ac5d35e`.
+  `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`.
 - `workspaces.updated_at` did not change in this probe.
 - PR cache content was unchanged.
 - Workspace-changes cache content only changed `refreshedAt`.

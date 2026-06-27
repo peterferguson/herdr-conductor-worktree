@@ -21,15 +21,15 @@ test("timestampSlug uses stable local timestamp formatting", () => {
 test("parseBranchPrefix reads Conductor branch prefix", () => {
   const toml = `
 [git]
-branch_prefix = "peter/"
+branch_prefix = "user/"
 branch_prefix_type = "custom"
 `;
-  assert.equal(parseBranchPrefix(toml), "peter/");
+  assert.equal(parseBranchPrefix(toml), "user/");
   assert.equal(parseBranchPrefix("[git]\narchive_on_merge = false\n"), "");
 });
 
 test("conductorPath places workspace under repo-named Conductor directory", () => {
-  const path = conductorPath("/Users/me/repos/example", "trial", "/tmp/conductor/workspaces");
+  const path = conductorPath("/path/to/repos/example", "trial", "/tmp/conductor/workspaces");
   assert.equal(path, "/tmp/conductor/workspaces/example/trial");
 });
 

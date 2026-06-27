@@ -10,18 +10,23 @@ max migration: 113
 migration count: 113
 ```
 
+Later verified as compatible with Conductor `0.70.0`, max migration `114`.
+Migration `114` is `track owning organization for cloud workspaces`; it adds
+nullable `workspaces.organization_id` plus an index and does not change the
+fields this plugin writes.
+
 This snapshot intentionally captures only the schema and settings relevant to
 workspace registration for this plugin. Re-capture when Conductor changes
 version or when registration behavior changes.
 
 ## Relevant Settings
 
-Observed values at capture time:
+Observed setting keys at capture time. Example values are anonymized:
 
 ```text
 branch_prefix_type: custom
-branch_prefix_custom: peter/
-client_instance_id: cc11422c-dbd8-4f67-b929-82dced9261bb
+branch_prefix_custom: user/
+client_instance_id: 44444444-4444-4444-8444-444444444444
 delete_branch_on_archive: true
 ```
 
@@ -173,7 +178,7 @@ delete_branch_on_archive
 
 ## Derived Cache Files
 
-During the `peter/windhoek` probe, Conductor created these files after the
+During the `user/trial-workspace` probe, Conductor created these files after the
 workspace existed:
 
 ```text
@@ -189,17 +194,17 @@ the plugin should not write them directly.
 Probe workspace:
 
 ```text
-workspace_id: d9241250-7d2a-4681-9b2d-b20e4ed4a039
-branch: peter/windhoek
-workspace_path: /Users/peterferguson/conductor/workspaces/noise-platform/windhoek
-archive_commit: 8ae6f3e1e8e91e1c8d3a8bea2d6fd81c6ac5d35e
+workspace_id: 22222222-2222-4222-8222-222222222222
+branch: user/trial-workspace
+workspace_path: /path/to/conductor/workspaces/example-repo/trial-workspace
+archive_commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 ```
 
 Archiving updated the existing `workspaces` row in place:
 
 ```text
 state: ready -> archived
-archive_commit: null -> 8ae6f3e1e8e91e1c8d3a8bea2d6fd81c6ac5d35e
+archive_commit: null -> aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 ```
 
 It did not remove the workspace row or its session row. It removed the Git
