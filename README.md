@@ -21,8 +21,45 @@ herdr plugin link /path/to/herdr-conductor-worktree
 From a Herdr pane inside a Git repository:
 
 ```bash
-herdr plugin action invoke peter.conductor-worktree.create
+herdr plugin action invoke community.conductor-worktree.create
 ```
+
+To also register the created worktree in Conductor's private database, use the
+explicit registered action:
+
+```bash
+herdr plugin action invoke community.conductor-worktree.create-registered
+```
+
+To compare Conductor and Herdr state, then choose which Conductor workspaces to
+open in Herdr and which archived Conductor workspaces to remove from Herdr:
+
+```bash
+herdr plugin action invoke community.conductor-worktree.sync-from-conductor
+```
+
+For an interactive keybinding, bind the pane wrapper instead of invoking the
+plugin action wrapper. Plugin actions run without an interactive TTY, while
+`type = "pane"` gives the sync command a terminal for yes/no prompts:
+
+```toml
+[[keys.command]]
+key = "prefix+shift+c"
+type = "pane"
+command = "/path/to/herdr-conductor-worktree/bin/sync-from-conductor-interactive"
+```
+
+The interactive sync pane uses a multi-select list:
+
+- `Open in Herdr` actions are green.
+- `Remove archived from Herdr` actions are red.
+- Repo names are cyan.
+- Branch names are yellow.
+- Up/Down or `j`/`k`: move
+- Space: toggle one item
+- `a`: toggle all
+- Enter: apply selected actions
+- `q`: cancel
 
 For a terminal trial without relying on Herdr pane context:
 
@@ -30,9 +67,73 @@ For a terminal trial without relying on Herdr pane context:
 node index.mjs create --cwd /path/to/repo --slug herdr-test
 ```
 
-The plugin reads `~/.conductor/settings.toml` and uses `[git].branch_prefix`
-when present. It refuses to overwrite an existing target directory or existing
-local branch.
+For an explicit registration trial:
+
+```bash
+node index.mjs create \
+  --cwd /path/to/repo \
+  --slug herdr-test \
+  --register-conductor
+```
+
+Conductor may not show a directly inserted workspace until the app restarts. To
+have the plugin quit and reopen Conductor after a successful registration on
+macOS, pass:
+
+```bash
+node index.mjs create \
+  --cwd /path/to/repo \
+  --slug herdr-test \
+  --register-conductor \
+  --restart-conductor
+```
+
+Registration is currently supported only for repos already present in
+Conductor. The plugin checks for a known compatible Conductor app/schema
+baseline before writing. Current supported baselines are app `0.69.1` with
+migration `113`, and app `0.70.0` with migration `114`. It creates a timestamped
+backup, inserts the `sessions` and `workspaces` rows, and verifies the rows
+after writing. The backup first tries SQLite's `.backup`; if that does not
+complete quickly, it copies `conductor.db` plus any WAL/SHM sidecars. If
+Conductor has changed, the command fails closed unless
+`--unsafe-conductor-version` is passed.
+
+Archive a registered workspace from the terminal with one of:
+
+```bash
+node index.mjs archive --workspace-id <id>
+node index.mjs archive --cwd /path/to/worktree
+node index.mjs archive --branch user/herdr-test
+```
+
+Archive refuses dirty worktrees unless `--force` is passed. It mirrors the
+observed Conductor behavior: capture worktree HEAD, back up the DB, remove the
+Git worktree, delete the branch when Conductor's `delete_branch_on_archive`
+setting is true, mark the workspace row `archived`, and preserve sessions/cache
+files. Pass `--restart-conductor` if Conductor does not show the archived state
+until restart.
+
+Sync from Conductor without prompts:
+
+```bash
+node index.mjs sync-from-conductor --open-new --remove-archived
+```
+
+The sync command reads Conductor `workspaces` rows under
+`~/conductor/workspaces`, compares them with `herdr workspace list`, and reports:
+
+- Conductor workspaces in `ready` or `active` state that are not open in Herdr.
+- Herdr workspaces whose checkout path points at a Conductor workspace now marked
+  `archived`.
+- Workspaces are listed newest-first by Conductor `workspaces.updated_at`.
+
+Without `--open-new`, `--remove-archived`, or `--interactive`, it only reports
+the differences.
+
+Without `--register-conductor`, the plugin reads `~/.conductor/settings.toml`
+and uses `[git].branch_prefix` when present. With registration enabled, it uses
+Conductor's `settings` table for the custom branch prefix. In both modes it
+refuses to overwrite an existing target directory or existing local branch.
 
 ## Development
 

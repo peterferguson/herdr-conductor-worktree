@@ -10,3 +10,15 @@ id = "create"
 title = "Create Conductor workspace"
 contexts = ["pane", "workspace"]
 command = ["node", "index.mjs", "create"]
+
+[[actions]]
+id = "create-registered"
+title = "Create registered Conductor workspace"
+contexts = ["pane", "workspace"]
+command = ["node", "index.mjs", "create", "--register-conductor"]
+
+[[actions]]
+id = "sync-from-conductor"
+title = "Sync Conductor workspaces"
+contexts = ["pane", "workspace"]
+command = ["node", "index.mjs", "sync-from-conductor", "--interactive"]
