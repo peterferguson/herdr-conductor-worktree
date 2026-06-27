@@ -5,7 +5,13 @@
   "type": "module",
   "description": "Herdr plugin for creating Conductor-shaped Git worktrees.",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.5"
   },
   "engines": {
     "node": ">=18"
