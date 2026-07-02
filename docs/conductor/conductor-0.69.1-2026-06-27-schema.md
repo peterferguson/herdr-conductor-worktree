@@ -10,10 +10,10 @@ max migration: 113
 migration count: 113
 ```
 
-Later verified as compatible with Conductor `0.70.0`, max migration `114`.
-Migration `114` is `track owning organization for cloud workspaces`; it adds
-nullable `workspaces.organization_id` plus an index and does not change the
-fields this plugin writes.
+Later verified as compatible with Conductor `0.70.0` and `0.71.1`, both at max
+migration `114`. Migration `114` is `track owning organization for cloud
+workspaces`; it adds nullable `workspaces.organization_id` plus an index and
+does not change the fields this plugin writes.
 
 This snapshot intentionally captures only the schema and settings relevant to
 workspace registration for this plugin. Re-capture when Conductor changes
