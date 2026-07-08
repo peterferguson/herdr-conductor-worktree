@@ -14,7 +14,14 @@ const SUPPORTED_CONDUCTOR_BASELINES = [
 ];
 const DEFAULT_SESSION_MODEL = "opus-4-8-1m";
 
-type Command = "create" | "create-panel" | "archive" | "archive-panel" | "sync-from-conductor" | undefined;
+type Command =
+  | "create"
+  | "create-panel"
+  | "archive"
+  | "archive-panel"
+  | "agent-panel"
+  | "sync-from-conductor"
+  | undefined;
 
 interface CliArgs {
   command: Command;
@@ -110,6 +117,16 @@ interface HerdrWorkspace {
   worktree?: {
     checkout_path?: string;
   };
+}
+
+interface HerdrAgent {
+  agent?: string;
+  agent_status?: string;
+  cwd?: string;
+  focused?: boolean;
+  pane_id: string;
+  tab_id?: string;
+  workspace_id?: string;
 }
 
 type SyncWorkspace = ConductorWorkspaceRow & {
@@ -277,6 +294,9 @@ export function parseArgs(argv: string[]): CliArgs {
   if (args.command === "archive-panel") {
     return args;
   }
+  if (args.command === "agent-panel") {
+    return args;
+  }
   if (args.command === "sync-from-conductor") {
     return args;
   }
@@ -287,6 +307,7 @@ export function parseArgs(argv: string[]): CliArgs {
       "  herdr-conductor-worktree create-panel [--cwd PATH] [--conductor-root PATH]",
       "  herdr-conductor-worktree archive (--workspace-id ID | --cwd PATH | --branch NAME) [--force] [--restart-conductor] [--herdr-workspace-id ID]",
       "  herdr-conductor-worktree archive-panel [--cwd PATH]",
+      "  herdr-conductor-worktree agent-panel",
       "  herdr-conductor-worktree sync-from-conductor [--interactive] [--open-new] [--remove-archived] [--dry-run]",
     ].join("\n"),
   );
@@ -1388,6 +1409,121 @@ function archivePanelCommand(args: CliArgs): void {
   render();
 }
 
+function herdrAgentList(): HerdrAgent[] {
+  const result = run(herdrBin(), ["agent", "list"]);
+  if (!result.ok) {
+    die(`herdr agent list failed: ${result.err || result.out}`);
+  }
+  try {
+    return (JSON.parse(result.out).result.agents || []).filter((agent: HerdrAgent) => agent.agent);
+  } catch (error) {
+    die(`herdr agent list returned invalid JSON: ${error.message}`);
+  }
+}
+
+function formatAgent(agent: HerdrAgent): string {
+  const label = agent.agent || "unknown";
+  const status = agent.agent_status || "unknown";
+  const cwd = agent.cwd || "";
+  return `${label} ${status} ${cwd}`;
+}
+
+function agentPanelCommand(): void {
+  const stdin = process.stdin;
+  const stdout = process.stdout;
+  const esc = "\x1b[";
+  let agents = herdrAgentList();
+  let selected = Math.max(0, agents.findIndex((agent) => agent.focused));
+  let mode: "ready" | "error" = "ready";
+  let message = "";
+  let terminalRestored = false;
+
+  const clear = () => stdout.write("\x1b[2J\x1b[H");
+  const visibleCount = () => Math.max(3, Math.min((stdout.rows || 24) - 5, 16));
+  const restoreTerminal = () => {
+    if (terminalRestored) return;
+    stdout.write("\x1b[?25h\x1b[?1049l\x1b[0m");
+    if (stdin.isTTY) stdin.setRawMode(false);
+    terminalRestored = true;
+  };
+  const close = (code = 0) => {
+    restoreTerminal();
+    process.exit(code);
+  };
+  const render = () => {
+    const cols = stdout.columns || 80;
+    if (selected >= agents.length) selected = Math.max(0, agents.length - 1);
+    clear();
+    stdout.write(`${esc}1mAgent Navigator${esc}0m  ${esc}2mEnter focuses · n/b move · r reload · Esc quits${esc}0m\n\n`);
+    if (mode === "error") {
+      stdout.write(`${esc}31m${truncateForPanel(message, cols)}${esc}0m\n\n`);
+      stdout.write(`${esc}2mPress any key to close.${esc}0m`);
+      return;
+    }
+    if (!agents.length) {
+      stdout.write(`${esc}2mNo agents found.${esc}0m`);
+      return;
+    }
+    const max = visibleCount();
+    const start = Math.max(0, Math.min(selected - Math.floor(max / 2), agents.length - max));
+    const list = agents.slice(start, start + max);
+    for (let i = 0; i < list.length; i += 1) {
+      const index = start + i;
+      const agent = list[i];
+      const active = index === selected;
+      const style = active ? `${esc}7m` : "";
+      const dim = active ? `${esc}7m` : `${esc}2m`;
+      const reset = `${esc}0m`;
+      const marker = active ? ">" : " ";
+      const focused = agent.focused ? " [focused]" : "";
+      stdout.write(`${style}${marker} ${truncateForPanel(formatAgent(agent), cols - 4)}${focused}${reset}\n`);
+      stdout.write(`${dim}  ${agent.workspace_id || "?"}/${agent.tab_id || "?"}/${agent.pane_id}${reset}\n`);
+    }
+  };
+  const focusSelected = () => {
+    const agent = agents[selected];
+    if (!agent) return;
+    restoreTerminal();
+    const result = run(herdrBin(), ["agent", "focus", agent.pane_id]);
+    if (!result.ok) {
+      process.stderr.write(result.err || result.out || `herdr agent focus failed for ${agent.pane_id}`);
+      process.stderr.write("\n");
+      process.exit(1);
+    }
+    process.exit(0);
+  };
+  const reloadAgents = () => {
+    agents = herdrAgentList();
+    selected = Math.max(0, agents.findIndex((agent) => agent.focused));
+    render();
+  };
+  const onKey = (buf: Buffer) => {
+    const key = buf.toString("utf8");
+    if (mode === "error") close(1);
+    if (key === "\x03" || key === "\x04" || key === "\x1b") close(0);
+    if (key === "\r" || key === "\n") return void focusSelected();
+    if (key === "\x1b[B" || key === "\x0e" || key === "n" || key === "j") {
+      selected = Math.min(agents.length - 1, selected + 1);
+    } else if (key === "\x1b[A" || key === "\x10" || key === "b" || key === "k") {
+      selected = Math.max(0, selected - 1);
+    } else if (key === "r") {
+      return void reloadAgents();
+    }
+    render();
+  };
+
+  if (!stdin.isTTY || !stdout.isTTY) {
+    die("agent-panel needs a TTY");
+  }
+
+  stdout.write("\x1b[?1049h\x1b[?25l");
+  stdin.setRawMode(true);
+  stdin.resume();
+  stdin.on("data", onKey);
+  process.on("SIGWINCH", render);
+  render();
+}
+
 async function main(): Promise<void> {
   let args;
   try {
@@ -1402,6 +1538,8 @@ async function main(): Promise<void> {
     createPanelCommand(args);
   } else if (args.command === "archive-panel") {
     archivePanelCommand(args);
+  } else if (args.command === "agent-panel") {
+    agentPanelCommand();
   } else if (args.command === "archive") {
     archiveConductorWorkspace(args);
     if (args.restartConductor) {

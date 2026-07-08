@@ -40,3 +40,9 @@ id = "archive-both"
 title = "Archive Conductor + Herdr worktree"
 placement = "overlay"
 command = ["./dist/index.js", "archive-panel"]
+
+[[panes]]
+id = "agent-navigator"
+title = "Agent Navigator"
+placement = "overlay"
+command = ["./dist/index.js", "agent-panel"]

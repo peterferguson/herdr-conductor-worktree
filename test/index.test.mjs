@@ -79,6 +79,7 @@ test("parseArgs supports panel commands", () => {
   assert.equal(parseArgs(["create-panel"]).command, "create-panel");
   assert.equal(parseArgs(["create-panel"]).registerConductor, true);
   assert.equal(parseArgs(["archive-panel"]).command, "archive-panel");
+  assert.equal(parseArgs(["agent-panel"]).command, "agent-panel");
 });
 
 test("parseArgs supports Conductor sync flags", () => {

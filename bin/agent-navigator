@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+exec herdr plugin pane open \
+  --plugin community.conductor-worktree \
+  --entrypoint agent-navigator \
+  --placement overlay \
+  --focus
