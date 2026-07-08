@@ -120,7 +120,7 @@ Registration is currently supported only for repos already present in
 Conductor. The plugin checks for a known compatible Conductor app/schema
 baseline before writing. Current supported baselines are app `0.69.1` with
 migration `113`, apps `0.70.0` and `0.71.1` with migration `114`, and app
-`0.72.0` with migration `115`. It
+`0.72.0` and `0.73.0` with migration `115`. It
 creates a timestamped backup, inserts the `sessions` and `workspaces` rows, and
 verifies the rows after writing. The backup first tries SQLite's `.backup`; if
 that does not complete quickly, it copies `conductor.db` plus any WAL/SHM

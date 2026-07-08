@@ -107,12 +107,15 @@ test("assertConductorCompatibility fails closed unless unsafe override is passed
   assert.doesNotThrow(() =>
     assertConductorCompatibility({ appVersion: "0.72.0", migrationMax: 115, unsafe: false }),
   );
+  assert.doesNotThrow(() =>
+    assertConductorCompatibility({ appVersion: "0.73.0", migrationMax: 115, unsafe: false }),
+  );
   assert.throws(
-    () => assertConductorCompatibility({ appVersion: "0.72.1", migrationMax: 115, unsafe: false }),
+    () => assertConductorCompatibility({ appVersion: "0.73.1", migrationMax: 115, unsafe: false }),
     /unsupported Conductor state/,
   );
   assert.doesNotThrow(() =>
-    assertConductorCompatibility({ appVersion: "0.72.1", migrationMax: 115, unsafe: true }),
+    assertConductorCompatibility({ appVersion: "0.73.1", migrationMax: 115, unsafe: true }),
   );
 });
 
