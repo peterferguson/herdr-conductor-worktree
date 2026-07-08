@@ -10,6 +10,7 @@ const SUPPORTED_CONDUCTOR_BASELINES = [
   { appVersion: "0.69.1", migrationMax: 113 },
   { appVersion: "0.70.0", migrationMax: 114 },
   { appVersion: "0.71.1", migrationMax: 114 },
+  { appVersion: "0.72.0", migrationMax: 115 },
 ];
 const DEFAULT_SESSION_MODEL = "opus-4-8-1m";
 
