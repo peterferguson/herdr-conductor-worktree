@@ -67,11 +67,18 @@ test("parseArgs supports explicit trial parameters", () => {
 });
 
 test("parseArgs supports archive selectors", () => {
-  const args = parseArgs(["archive", "--workspace-id", "workspace-1", "--force"]);
+  const args = parseArgs(["archive", "--workspace-id", "workspace-1", "--force", "--herdr-workspace-id", "w1"]);
   assert.equal(args.command, "archive");
   assert.equal(args.workspaceId, "workspace-1");
   assert.equal(args.force, true);
+  assert.equal(args.herdrWorkspaceId, "w1");
   assert.throws(() => parseArgs(["archive"]), /archive requires/);
+});
+
+test("parseArgs supports panel commands", () => {
+  assert.equal(parseArgs(["create-panel"]).command, "create-panel");
+  assert.equal(parseArgs(["create-panel"]).registerConductor, true);
+  assert.equal(parseArgs(["archive-panel"]).command, "archive-panel");
 });
 
 test("parseArgs supports Conductor sync flags", () => {

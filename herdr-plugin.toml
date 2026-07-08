@@ -18,7 +18,25 @@ contexts = ["pane", "workspace"]
 command = ["./dist/index.js", "create", "--register-conductor"]
 
 [[actions]]
+id = "create-both"
+title = "Create Conductor + Herdr worktree"
+contexts = ["pane", "workspace"]
+command = ["./dist/index.js", "create", "--register-conductor"]
+
+[[actions]]
 id = "sync-from-conductor"
 title = "Sync Conductor workspaces"
 contexts = ["pane", "workspace"]
 command = ["./dist/index.js", "sync-from-conductor", "--interactive"]
+
+[[panes]]
+id = "create-both"
+title = "Create Conductor + Herdr worktree"
+placement = "overlay"
+command = ["./dist/index.js", "create-panel"]
+
+[[panes]]
+id = "archive-both"
+title = "Archive Conductor + Herdr worktree"
+placement = "overlay"
+command = ["./dist/index.js", "archive-panel"]

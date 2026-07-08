@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+CWD=${HERDR_ACTIVE_PANE_CWD:-${PWD:-}}
+WORKSPACE_ID=${HERDR_ACTIVE_WORKSPACE_ID:-${HERDR_WORKSPACE_ID:-}}
+
+if [ -n "$CWD" ]; then
+  exec herdr plugin pane open \
+    --plugin community.conductor-worktree \
+    --entrypoint archive-both \
+    --placement overlay \
+    --env "CONDUCTOR_WORKTREE_ARCHIVE_PANEL_CWD=$CWD" \
+    --env "CONDUCTOR_WORKTREE_ARCHIVE_HERDR_WORKSPACE_ID=$WORKSPACE_ID" \
+    --focus
+fi
+
+exec herdr plugin pane open \
+  --plugin community.conductor-worktree \
+  --entrypoint archive-both \
+  --placement overlay \
+  --env "CONDUCTOR_WORKTREE_ARCHIVE_HERDR_WORKSPACE_ID=$WORKSPACE_ID" \
+  --focus

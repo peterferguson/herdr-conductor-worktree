@@ -10,14 +10,31 @@ var TAG = "[conductor-worktree]";
 var SUPPORTED_CONDUCTOR_BASELINES = [
   { appVersion: "0.69.1", migrationMax: 113 },
   { appVersion: "0.70.0", migrationMax: 114 },
-  { appVersion: "0.71.1", migrationMax: 114 }
+  { appVersion: "0.71.1", migrationMax: 114 },
+  { appVersion: "0.72.0", migrationMax: 115 }
 ];
 var DEFAULT_SESSION_MODEL = "opus-4-8-1m";
 function log(message) {
   process.stdout.write(`${TAG} ${message}
 `);
 }
+function notifyPluginError(message) {
+  if (!process.env.HERDR_PLUGIN_ACTION_ID)
+    return;
+  spawnSync(herdrBin(), [
+    "notification",
+    "show",
+    "Conductor worktree failed",
+    "--body",
+    message,
+    "--position",
+    "bottom-right",
+    "--sound",
+    "request"
+  ], { encoding: "utf8", timeout: 2000 });
+}
 function die(message) {
+  notifyPluginError(message);
   process.stderr.write(`${TAG} error: ${message}
 `);
   process.exit(1);
@@ -66,6 +83,7 @@ function parseArgs(argv) {
     conductorApp: process.env.CONDUCTOR_APP_PATH || "/Applications/Conductor.app",
     conductorDb: process.env.CONDUCTOR_DB_PATH || defaultConductorDbPath(),
     repoId: undefined,
+    herdrWorkspaceId: undefined,
     sessionModel: process.env.CONDUCTOR_WORKTREE_SESSION_MODEL || DEFAULT_SESSION_MODEL,
     dryRun: false,
     registerConductor: false,
@@ -94,6 +112,8 @@ function parseArgs(argv) {
       args.conductorDb = argv[++i];
     } else if (arg === "--repo-id") {
       args.repoId = argv[++i];
+    } else if (arg === "--herdr-workspace-id") {
+      args.herdrWorkspaceId = argv[++i];
     } else if (arg === "--session-model") {
       args.sessionModel = argv[++i];
     } else if (arg === "--dry-run") {
@@ -119,10 +139,17 @@ function parseArgs(argv) {
   if (args.command === "create") {
     return args;
   }
+  if (args.command === "create-panel") {
+    args.registerConductor = true;
+    return args;
+  }
   if (args.command === "archive") {
     if (!args.workspaceId && !args.cwd && !args.branch) {
       throw new Error("archive requires one of --workspace-id, --cwd, or --branch");
     }
+    return args;
+  }
+  if (args.command === "archive-panel") {
     return args;
   }
   if (args.command === "sync-from-conductor") {
@@ -131,7 +158,9 @@ function parseArgs(argv) {
   throw new Error([
     "usage:",
     "  herdr-conductor-worktree create [--cwd PATH] [--slug NAME] [--conductor-root PATH] [--dry-run] [--register-conductor] [--restart-conductor]",
-    "  herdr-conductor-worktree archive (--workspace-id ID | --cwd PATH | --branch NAME) [--force] [--restart-conductor]",
+    "  herdr-conductor-worktree create-panel [--cwd PATH] [--conductor-root PATH]",
+    "  herdr-conductor-worktree archive (--workspace-id ID | --cwd PATH | --branch NAME) [--force] [--restart-conductor] [--herdr-workspace-id ID]",
+    "  herdr-conductor-worktree archive-panel [--cwd PATH]",
     "  herdr-conductor-worktree sync-from-conductor [--interactive] [--open-new] [--remove-archived] [--dry-run]"
   ].join(`
 `));
@@ -857,6 +886,13 @@ function archiveConductorWorkspace(args) {
   log(`archived conductor workspace id: ${workspace.id}`);
   log(`archive commit: ${head.out}`);
   log(`conductor db backup: ${backupPath}`);
+  if (args.herdrWorkspaceId) {
+    const removeHerdr = run(herdrBin(), ["worktree", "remove", "--workspace", args.herdrWorkspaceId, "--force", "--json"]);
+    if (!removeHerdr.ok) {
+      die(`archived Conductor workspace but Herdr removal failed: ${removeHerdr.err || removeHerdr.out}`);
+    }
+    log(`removed Herdr workspace: ${args.herdrWorkspaceId}`);
+  }
   log("restart Conductor if the archived state does not appear immediately");
 }
 function createCommand(args) {
@@ -896,6 +932,234 @@ function createCommand(args) {
     }
   }
 }
+function panelCwd(args) {
+  if (process.env.CONDUCTOR_WORKTREE_PANEL_CWD) {
+    return resolve(process.env.CONDUCTOR_WORKTREE_PANEL_CWD);
+  }
+  return resolve(sourceCwd(args.cwd));
+}
+function archivePanelCwd(args) {
+  if (process.env.CONDUCTOR_WORKTREE_ARCHIVE_PANEL_CWD) {
+    return resolve(process.env.CONDUCTOR_WORKTREE_ARCHIVE_PANEL_CWD);
+  }
+  return resolve(sourceCwd(args.cwd));
+}
+function truncateForPanel(value, width) {
+  const chars = [...value];
+  if (chars.length <= width)
+    return value;
+  return `${chars.slice(0, Math.max(0, width - 1)).join("")}…`;
+}
+function createPanelCommand(args) {
+  const stdin = process.stdin;
+  const stdout = process.stdout;
+  const esc = "\x1B[";
+  const cwd = panelCwd(args);
+  const repoResult = git(cwd, "rev-parse", "--show-toplevel");
+  const repo = repoResult.ok ? repoResult.out : cwd;
+  let input = timestampSlug();
+  let mode = repoResult.ok ? "ready" : "error";
+  let message = repoResult.ok ? "" : `${cwd} is not inside a Git repository`;
+  let terminalRestored = false;
+  const clear = () => stdout.write("\x1B[2J\x1B[H");
+  const restoreTerminal = () => {
+    if (terminalRestored)
+      return;
+    stdout.write("\x1B[?25h\x1B[?1049l\x1B[0m");
+    if (stdin.isTTY)
+      stdin.setRawMode(false);
+    terminalRestored = true;
+  };
+  const close = (code = 0) => {
+    restoreTerminal();
+    process.exit(code);
+  };
+  const render = () => {
+    const cols = stdout.columns || 80;
+    clear();
+    stdout.write(`${esc}1mCreate Conductor + Herdr worktree${esc}0m  ${esc}2mEnter creates · Esc quits${esc}0m
+
+`);
+    stdout.write(`${esc}2mRepo${esc}0m ${truncateForPanel(repo, cols - 6)}
+
+`);
+    if (mode === "ready") {
+      stdout.write(`${esc}36mWorkspace${esc}0m ${input}
+`);
+      return;
+    }
+    if (mode === "running") {
+      stdout.write(`${esc}33mCreating ${input}…${esc}0m
+`);
+      return;
+    }
+    const color2 = mode === "result" ? "32" : "31";
+    stdout.write(`${esc}${color2}m${truncateForPanel(message, cols)}${esc}0m
+
+`);
+    stdout.write(`${esc}2mPress any key to close.${esc}0m`);
+  };
+  const runCreate = () => {
+    const slug = slugify(input);
+    input = slug;
+    mode = "running";
+    render();
+    const result = run(process.execPath, [
+      process.argv[1],
+      "create",
+      "--cwd",
+      cwd,
+      "--slug",
+      slug,
+      "--register-conductor"
+    ]);
+    if (result.ok) {
+      mode = "result";
+      message = result.out || `Created ${slug}`;
+    } else {
+      mode = "error";
+      message = result.err || result.out || `create failed with status ${result.status}`;
+    }
+    render();
+  };
+  const onKey = (buf) => {
+    const key = buf.toString("utf8");
+    if (mode === "result" || mode === "error")
+      close(mode === "result" ? 0 : 1);
+    if (key === "\x03" || key === "\x04" || key === "\x1B")
+      close(0);
+    if (key === "\r" || key === `
+`)
+      return void runCreate();
+    if (key === "" || key === "\b")
+      input = input.slice(0, -1);
+    else if (key === "\x15")
+      input = "";
+    else if (!key.startsWith("\x1B") && /^[\x20-\x7e]+$/.test(key))
+      input += key;
+    render();
+  };
+  if (!stdin.isTTY || !stdout.isTTY) {
+    die("create-panel needs a TTY");
+  }
+  stdout.write("\x1B[?1049h\x1B[?25l");
+  stdin.setRawMode(true);
+  stdin.resume();
+  stdin.on("data", onKey);
+  process.on("SIGWINCH", render);
+  render();
+}
+function archivePanelCommand(args) {
+  const stdin = process.stdin;
+  const stdout = process.stdout;
+  const esc = "\x1B[";
+  const cwd = archivePanelCwd(args);
+  const herdrWorkspaceId = process.env.CONDUCTOR_WORKTREE_ARCHIVE_HERDR_WORKSPACE_ID || args.herdrWorkspaceId || "";
+  let input = "";
+  let force = false;
+  let mode = "ready";
+  let message = "";
+  let terminalRestored = false;
+  const clear = () => stdout.write("\x1B[2J\x1B[H");
+  const restoreTerminal = () => {
+    if (terminalRestored)
+      return;
+    stdout.write("\x1B[?25h\x1B[?1049l\x1B[0m");
+    if (stdin.isTTY)
+      stdin.setRawMode(false);
+    terminalRestored = true;
+  };
+  const close = (code = 0) => {
+    restoreTerminal();
+    process.exit(code);
+  };
+  const render = () => {
+    const cols = stdout.columns || 80;
+    clear();
+    stdout.write(`${esc}1mArchive Conductor + Herdr worktree${esc}0m  ${esc}2mEnter archives · f toggles force · Esc quits${esc}0m
+
+`);
+    stdout.write(`${esc}2mWorktree${esc}0m ${truncateForPanel(cwd, cols - 11)}
+`);
+    stdout.write(`${esc}2mHerdr${esc}0m ${herdrWorkspaceId || "unknown"}
+
+`);
+    if (mode === "ready") {
+      stdout.write(`${esc}33mType archive to confirm${esc}0m ${input}
+`);
+      stdout.write(`${esc}2mForce dirty worktree: ${force ? "yes" : "no"}${esc}0m
+`);
+      return;
+    }
+    if (mode === "running") {
+      stdout.write(`${esc}33mArchiving…${esc}0m
+`);
+      return;
+    }
+    const color2 = mode === "result" ? "32" : "31";
+    stdout.write(`${esc}${color2}m${truncateForPanel(message, cols)}${esc}0m
+
+`);
+    stdout.write(`${esc}2mPress any key to close.${esc}0m`);
+  };
+  const runArchive = () => {
+    if (input !== "archive") {
+      message = "confirmation text did not match";
+      mode = "error";
+      render();
+      return;
+    }
+    mode = "running";
+    render();
+    const command = [
+      process.argv[1],
+      "archive",
+      "--cwd",
+      cwd
+    ];
+    if (force)
+      command.push("--force");
+    if (herdrWorkspaceId)
+      command.push("--herdr-workspace-id", herdrWorkspaceId);
+    const result = run(process.execPath, command);
+    if (result.ok) {
+      mode = "result";
+      message = result.out || "Archived worktree";
+    } else {
+      mode = "error";
+      message = result.err || result.out || `archive failed with status ${result.status}`;
+    }
+    render();
+  };
+  const onKey = (buf) => {
+    const key = buf.toString("utf8");
+    if (mode === "result" || mode === "error")
+      close(mode === "result" ? 0 : 1);
+    if (key === "\x03" || key === "\x04" || key === "\x1B")
+      close(0);
+    if (key === "\r" || key === `
+`)
+      return void runArchive();
+    if (key === "" || key === "\b")
+      input = input.slice(0, -1);
+    else if (key === "\x15")
+      input = "";
+    else if (key === "f")
+      force = !force;
+    else if (!key.startsWith("\x1B") && /^[\x20-\x7e]+$/.test(key))
+      input += key;
+    render();
+  };
+  if (!stdin.isTTY || !stdout.isTTY) {
+    die("archive-panel needs a TTY");
+  }
+  stdout.write("\x1B[?1049h\x1B[?25l");
+  stdin.setRawMode(true);
+  stdin.resume();
+  stdin.on("data", onKey);
+  process.on("SIGWINCH", render);
+  render();
+}
 async function main() {
   let args;
   try {
@@ -905,6 +1169,10 @@ async function main() {
   }
   if (args.command === "create") {
     createCommand(args);
+  } else if (args.command === "create-panel") {
+    createPanelCommand(args);
+  } else if (args.command === "archive-panel") {
+    archivePanelCommand(args);
   } else if (args.command === "archive") {
     archiveConductorWorkspace(args);
     if (args.restartConductor) {

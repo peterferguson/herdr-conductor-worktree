@@ -24,8 +24,36 @@ From a Herdr pane inside a Git repository:
 herdr plugin action invoke community.conductor-worktree.create
 ```
 
-To also register the created worktree in Conductor's private database, use the
-explicit registered action:
+To create the worktree in Herdr and register it in Conductor's private database,
+use the explicit both-apps action:
+
+```bash
+herdr plugin action invoke community.conductor-worktree.create-both
+```
+
+Bind that action to a simple key in your Herdr config:
+
+```toml
+[[keys.command]]
+key = "prefix+shift+o"
+type = "shell"
+command = "/path/to/herdr-conductor-worktree/bin/create-both-visible"
+description = "create Conductor + Herdr worktree"
+
+[[keys.command]]
+key = "prefix+shift+a"
+type = "shell"
+command = "/path/to/herdr-conductor-worktree/bin/archive-both-visible"
+description = "archive Conductor + Herdr worktree"
+```
+
+Then reload Herdr:
+
+```bash
+herdr server reload-config
+```
+
+`create-both` is an alias for the existing registered create flow:
 
 ```bash
 herdr plugin action invoke community.conductor-worktree.create-registered

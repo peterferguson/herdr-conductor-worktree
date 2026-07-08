@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+CWD=${HERDR_ACTIVE_PANE_CWD:-${PWD:-}}
+
+if [ -n "$CWD" ]; then
+  exec herdr plugin pane open \
+    --plugin community.conductor-worktree \
+    --entrypoint create-both \
+    --placement overlay \
+    --env "CONDUCTOR_WORKTREE_PANEL_CWD=$CWD" \
+    --focus
+fi
+
+exec herdr plugin pane open \
+  --plugin community.conductor-worktree \
+  --entrypoint create-both \
+  --placement overlay \
+  --focus
