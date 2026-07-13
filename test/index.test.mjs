@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   assertConductorCompatibility,
+  branchWorkspaceSlug,
   buildConductorArchiveSql,
   buildConductorRegistrationSql,
   buildSyncCandidates,
@@ -20,6 +21,11 @@ import {
 test("slugify normalizes names for branch and path usage", () => {
   assert.equal(slugify("  My Feature / V2!  "), "my-feature-v2");
   assert.equal(slugify("___"), "workspace");
+});
+
+test("branchWorkspaceSlug derives safe workspace names from branches", () => {
+  assert.equal(branchWorkspaceSlug("peter/feature-v2"), "peter-feature-v2");
+  assert.equal(branchWorkspaceSlug("peter/feature-v2", "Trial Workspace"), "trial-workspace");
 });
 
 test("timestampSlug uses stable local timestamp formatting", () => {
@@ -53,6 +59,10 @@ test("parseArgs supports explicit trial parameters", () => {
     "/repo",
     "--slug",
     "Trial",
+    "--branch",
+    "user/trial",
+    "--base",
+    "origin/user/trial",
     "--dry-run",
     "--register-conductor",
     "--restart-conductor",
@@ -60,6 +70,8 @@ test("parseArgs supports explicit trial parameters", () => {
   assert.equal(args.command, "create");
   assert.equal(args.cwd, "/repo");
   assert.equal(args.slug, "Trial");
+  assert.equal(args.branch, "user/trial");
+  assert.equal(args.base, "origin/user/trial");
   assert.equal(args.conductorRoot, "~/conductor/workspaces");
   assert.equal(args.dryRun, true);
   assert.equal(args.registerConductor, true);
@@ -78,6 +90,8 @@ test("parseArgs supports archive selectors", () => {
 test("parseArgs supports panel commands", () => {
   assert.equal(parseArgs(["create-panel"]).command, "create-panel");
   assert.equal(parseArgs(["create-panel"]).registerConductor, true);
+  assert.equal(parseArgs(["create-branch-panel"]).command, "create-branch-panel");
+  assert.equal(parseArgs(["create-branch-panel"]).registerConductor, true);
   assert.equal(parseArgs(["archive-panel"]).command, "archive-panel");
   assert.equal(parseArgs(["agent-panel"]).command, "agent-panel");
 });
@@ -110,12 +124,15 @@ test("assertConductorCompatibility fails closed unless unsafe override is passed
   assert.doesNotThrow(() =>
     assertConductorCompatibility({ appVersion: "0.73.0", migrationMax: 115, unsafe: false }),
   );
+  assert.doesNotThrow(() =>
+    assertConductorCompatibility({ appVersion: "0.73.3", migrationMax: 115, unsafe: false }),
+  );
   assert.throws(
-    () => assertConductorCompatibility({ appVersion: "0.73.1", migrationMax: 115, unsafe: false }),
+    () => assertConductorCompatibility({ appVersion: "0.73.4", migrationMax: 115, unsafe: false }),
     /unsupported Conductor state/,
   );
   assert.doesNotThrow(() =>
-    assertConductorCompatibility({ appVersion: "0.73.1", migrationMax: 115, unsafe: true }),
+    assertConductorCompatibility({ appVersion: "0.73.4", migrationMax: 115, unsafe: true }),
   );
 });
 

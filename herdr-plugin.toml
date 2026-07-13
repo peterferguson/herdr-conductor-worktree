@@ -36,6 +36,12 @@ placement = "overlay"
 command = ["./dist/index.js", "create-panel"]
 
 [[panes]]
+id = "create-from-branch"
+title = "Create Conductor + Herdr worktree from branch"
+placement = "overlay"
+command = ["./dist/index.js", "create-branch-panel"]
+
+[[panes]]
 id = "archive-both"
 title = "Archive Conductor + Herdr worktree"
 placement = "overlay"

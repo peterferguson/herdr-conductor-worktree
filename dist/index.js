@@ -12,7 +12,8 @@ var SUPPORTED_CONDUCTOR_BASELINES = [
   { appVersion: "0.70.0", migrationMax: 114 },
   { appVersion: "0.71.1", migrationMax: 114 },
   { appVersion: "0.72.0", migrationMax: 115 },
-  { appVersion: "0.73.0", migrationMax: 115 }
+  { appVersion: "0.73.0", migrationMax: 115 },
+  { appVersion: "0.73.3", migrationMax: 115 }
 ];
 var DEFAULT_SESSION_MODEL = "opus-4-8-1m";
 function log(message) {
@@ -73,12 +74,16 @@ function readConductorBranchPrefix(settingsPath = join(homedir(), ".conductor", 
 function conductorPath(repoRoot, workspaceSlug, conductorRoot = "~/conductor/workspaces") {
   return resolve(expandHome(conductorRoot), basename(repoRoot), workspaceSlug);
 }
+function branchWorkspaceSlug(branch, explicitSlug) {
+  return slugify(explicitSlug || branch);
+}
 function parseArgs(argv) {
   const args = {
     command: argv[0],
     cwd: undefined,
     workspaceId: undefined,
     branch: undefined,
+    base: undefined,
     slug: undefined,
     conductorRoot: process.env.CONDUCTOR_WORKTREE_ROOT || "~/conductor/workspaces",
     conductorApp: process.env.CONDUCTOR_APP_PATH || "/Applications/Conductor.app",
@@ -103,6 +108,8 @@ function parseArgs(argv) {
       args.workspaceId = argv[++i];
     } else if (arg === "--branch") {
       args.branch = argv[++i];
+    } else if (arg === "--base") {
+      args.base = argv[++i];
     } else if (arg === "--slug") {
       args.slug = argv[++i];
     } else if (arg === "--conductor-root") {
@@ -144,6 +151,10 @@ function parseArgs(argv) {
     args.registerConductor = true;
     return args;
   }
+  if (args.command === "create-branch-panel") {
+    args.registerConductor = true;
+    return args;
+  }
   if (args.command === "archive") {
     if (!args.workspaceId && !args.cwd && !args.branch) {
       throw new Error("archive requires one of --workspace-id, --cwd, or --branch");
@@ -161,8 +172,9 @@ function parseArgs(argv) {
   }
   throw new Error([
     "usage:",
-    "  herdr-conductor-worktree create [--cwd PATH] [--slug NAME] [--conductor-root PATH] [--dry-run] [--register-conductor] [--restart-conductor]",
+    "  herdr-conductor-worktree create [--cwd PATH] [--slug NAME] [--branch NAME] [--base REF] [--conductor-root PATH] [--dry-run] [--register-conductor] [--restart-conductor]",
     "  herdr-conductor-worktree create-panel [--cwd PATH] [--conductor-root PATH]",
+    "  herdr-conductor-worktree create-branch-panel [--cwd PATH] [--conductor-root PATH]",
     "  herdr-conductor-worktree archive (--workspace-id ID | --cwd PATH | --branch NAME) [--force] [--restart-conductor] [--herdr-workspace-id ID]",
     "  herdr-conductor-worktree archive-panel [--cwd PATH]",
     "  herdr-conductor-worktree agent-panel",
@@ -218,6 +230,26 @@ function repoRoot(cwd) {
 function branchExists(repo, branch) {
   return git(repo, "show-ref", "--verify", "--quiet", `refs/heads/${branch}`).ok;
 }
+function refExists(repo, ref) {
+  return git(repo, "rev-parse", "--verify", "--quiet", `${ref}^{commit}`).ok;
+}
+function branchNameIsValid(repo, branch) {
+  return git(repo, "check-ref-format", "--branch", branch).ok;
+}
+function remoteBranchBase(repo, branch) {
+  const remotes = git(repo, "remote");
+  if (!remotes.ok || !remotes.out)
+    return;
+  const names = remotes.out.split(`
+`).map((remote) => remote.trim()).filter(Boolean);
+  const ordered = [...new Set(["origin", ...names])].filter((remote) => names.includes(remote));
+  for (const remote of ordered) {
+    if (refExists(repo, `refs/remotes/${remote}/${branch}`)) {
+      return `${remote}/${branch}`;
+    }
+  }
+  return;
+}
 function worktreeIsClean(worktreePath) {
   const result = git(worktreePath, "status", "--porcelain");
   return result.ok && result.out === "";
@@ -229,6 +261,7 @@ function createWorktree({
   repo,
   slug,
   branch,
+  base,
   targetPath,
   dryRun
 }) {
@@ -238,14 +271,12 @@ function createWorktree({
     "--cwd",
     repo,
     "--branch",
-    branch,
-    "--path",
-    targetPath,
-    "--label",
-    slug,
-    "--focus",
-    "--json"
+    branch
   ];
+  if (base) {
+    command.push("--base", base);
+  }
+  command.push("--path", targetPath, "--label", slug, "--focus", "--json");
   if (dryRun) {
     log(`dry-run: ${herdrBin()} ${command.map((part) => JSON.stringify(part)).join(" ")}`);
     return;
@@ -902,23 +933,37 @@ function archiveConductorWorkspace(args) {
 }
 function createCommand(args) {
   const repo = repoRoot(resolve(sourceCwd(args.cwd)));
-  const slug = slugify(args.slug || timestampSlug());
   const env = args.registerConductor ? loadConductorEnvironment(args) : undefined;
   const repoRow = env ? loadConductorRepo(env.dbPath, repo, args.repoId) : undefined;
-  const prefix = env ? conductorBranchPrefix(env.settings) : readConductorBranchPrefix();
-  const branch = `${prefix}${slug}`;
+  const requestedBranch = args.branch?.trim();
+  if (args.branch !== undefined && !requestedBranch) {
+    die("--branch must not be empty");
+  }
+  const slug = requestedBranch ? branchWorkspaceSlug(requestedBranch, args.slug) : slugify(args.slug || timestampSlug());
+  const prefix = requestedBranch ? "" : env ? conductorBranchPrefix(env.settings) : readConductorBranchPrefix();
+  const branch = requestedBranch ? requestedBranch : `${prefix}${slug}`;
+  const localBranchExists = branchExists(repo, branch);
+  const base = args.base || (requestedBranch && !localBranchExists ? remoteBranchBase(repo, branch) : undefined);
   const targetPath = conductorPath(repo, slug, args.conductorRoot);
+  if (!branchNameIsValid(repo, branch)) {
+    die(`invalid branch name: ${branch}`);
+  }
   if (existsSync(targetPath)) {
     die(`target path already exists: ${targetPath}`);
   }
-  if (branchExists(repo, branch)) {
+  if (!requestedBranch && localBranchExists) {
     die(`branch already exists: ${branch}`);
+  }
+  if (requestedBranch && !localBranchExists && !base) {
+    die(`branch does not exist locally or on a remote: ${branch}; pass --base REF to create it`);
   }
   log(`repo: ${repo}`);
   log(`workspace: ${slug}`);
   log(`branch: ${branch}`);
+  if (base)
+    log(`base: ${base}`);
   log(`path: ${targetPath}`);
-  createWorktree({ repo, slug, branch, targetPath, dryRun: args.dryRun });
+  createWorktree({ repo, slug, branch, base, targetPath, dryRun: args.dryRun });
   if (args.registerConductor) {
     if (args.dryRun) {
       log("dry-run: skipped Conductor DB registration");
@@ -1046,6 +1091,111 @@ function createPanelCommand(args) {
   };
   if (!stdin.isTTY || !stdout.isTTY) {
     die("create-panel needs a TTY");
+  }
+  stdout.write("\x1B[?1049h\x1B[?25l");
+  stdin.setRawMode(true);
+  stdin.resume();
+  stdin.on("data", onKey);
+  process.on("SIGWINCH", render);
+  render();
+}
+function createBranchPanelCommand(args) {
+  const stdin = process.stdin;
+  const stdout = process.stdout;
+  const esc = "\x1B[";
+  const cwd = panelCwd(args);
+  const repoResult = git(cwd, "rev-parse", "--show-toplevel");
+  const repo = repoResult.ok ? repoResult.out : cwd;
+  let input = "";
+  let mode = repoResult.ok ? "ready" : "error";
+  let message = repoResult.ok ? "" : `${cwd} is not inside a Git repository`;
+  let terminalRestored = false;
+  const clear = () => stdout.write("\x1B[2J\x1B[H");
+  const restoreTerminal = () => {
+    if (terminalRestored)
+      return;
+    stdout.write("\x1B[?25h\x1B[?1049l\x1B[0m");
+    if (stdin.isTTY)
+      stdin.setRawMode(false);
+    terminalRestored = true;
+  };
+  const close = (code = 0) => {
+    restoreTerminal();
+    process.exit(code);
+  };
+  const render = () => {
+    const cols = stdout.columns || 80;
+    clear();
+    stdout.write(`${esc}1mCreate Conductor + Herdr worktree from branch${esc}0m  ${esc}2mEnter creates · Esc quits${esc}0m
+
+`);
+    stdout.write(`${esc}2mRepo${esc}0m ${truncateForPanel(repo, cols - 6)}
+
+`);
+    if (mode === "ready") {
+      stdout.write(`${esc}36mBranch${esc}0m ${input}
+`);
+      return;
+    }
+    if (mode === "running") {
+      stdout.write(`${esc}33mCreating ${input}…${esc}0m
+`);
+      return;
+    }
+    const color2 = mode === "result" ? "32" : "31";
+    stdout.write(`${esc}${color2}m${truncateForPanel(message, cols)}${esc}0m
+
+`);
+    stdout.write(`${esc}2mPress any key to close.${esc}0m`);
+  };
+  const runCreate = () => {
+    const branch = input.trim();
+    if (!branch) {
+      message = "branch must not be empty";
+      mode = "error";
+      render();
+      return;
+    }
+    input = branch;
+    mode = "running";
+    render();
+    const result = run(process.execPath, [
+      process.argv[1],
+      "create",
+      "--cwd",
+      cwd,
+      "--branch",
+      branch,
+      "--register-conductor"
+    ]);
+    if (result.ok) {
+      mode = "result";
+      message = result.out || `Created ${branch}`;
+    } else {
+      mode = "error";
+      message = result.err || result.out || `create failed with status ${result.status}`;
+    }
+    render();
+  };
+  const onKey = (buf) => {
+    const key = buf.toString("utf8");
+    if (mode === "result" || mode === "error")
+      close(mode === "result" ? 0 : 1);
+    if (key === "\x03" || key === "\x04" || key === "\x1B")
+      close(0);
+    if (key === "\r" || key === `
+`)
+      return void runCreate();
+    if (key === "" || key === "\b")
+      input = input.slice(0, -1);
+    else if (key === "\x15")
+      input = "";
+    else if (!key.startsWith("\x1B") && /^[\x20-\x7e]+$/.test(key))
+      input += key;
+    render();
+  };
+  if (!stdin.isTTY || !stdout.isTTY) {
+    die("create-branch-panel needs a TTY");
   }
   stdout.write("\x1B[?1049h\x1B[?25l");
   stdin.setRawMode(true);
@@ -1300,6 +1450,8 @@ async function main() {
     createCommand(args);
   } else if (args.command === "create-panel") {
     createPanelCommand(args);
+  } else if (args.command === "create-branch-panel") {
+    createBranchPanelCommand(args);
   } else if (args.command === "archive-panel") {
     archivePanelCommand(args);
   } else if (args.command === "agent-panel") {
@@ -1334,5 +1486,6 @@ export {
   buildSyncCandidates,
   buildConductorRegistrationSql,
   buildConductorArchiveSql,
+  branchWorkspaceSlug,
   assertConductorCompatibility
 };

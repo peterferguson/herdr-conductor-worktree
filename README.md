@@ -31,6 +31,22 @@ use the explicit both-apps action:
 herdr plugin action invoke community.conductor-worktree.create-both
 ```
 
+To create a Conductor + Herdr workspace from an existing branch:
+
+```bash
+dist/index.js create \
+  --cwd /path/to/repo \
+  --branch peter/existing-feature \
+  --register-conductor
+```
+
+The workspace directory defaults to a slug derived from the branch name, for
+example `peter-existing-feature`. Pass `--slug NAME` to choose a shorter
+workspace directory. If the branch exists only as `origin/<branch>`, the plugin
+uses that remote-tracking branch as the base for the local checkout. If no local
+or remote branch exists, pass `--base REF` explicitly to create the branch from
+that ref.
+
 Bind that action to a simple key in your Herdr config:
 
 ```toml
@@ -39,6 +55,12 @@ key = "prefix+shift+o"
 type = "shell"
 command = "/path/to/herdr-conductor-worktree/bin/create-both-visible"
 description = "create Conductor + Herdr worktree"
+
+[[keys.command]]
+key = "prefix+shift+b"
+type = "shell"
+command = "/path/to/herdr-conductor-worktree/bin/create-from-branch-visible"
+description = "create Conductor + Herdr worktree from branch"
 
 [[keys.command]]
 key = "prefix+shift+a"
@@ -120,7 +142,7 @@ Registration is currently supported only for repos already present in
 Conductor. The plugin checks for a known compatible Conductor app/schema
 baseline before writing. Current supported baselines are app `0.69.1` with
 migration `113`, apps `0.70.0` and `0.71.1` with migration `114`, and app
-`0.72.0` and `0.73.0` with migration `115`. It
+`0.72.0`, `0.73.0`, and `0.73.3` with migration `115`. It
 creates a timestamped backup, inserts the `sessions` and `workspaces` rows, and
 verifies the rows after writing. The backup first tries SQLite's `.backup`; if
 that does not complete quickly, it copies `conductor.db` plus any WAL/SHM
