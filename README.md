@@ -45,7 +45,7 @@ example `peter-existing-feature`. Pass `--slug NAME` to choose a shorter
 workspace directory. If the branch exists only as `origin/<branch>`, the plugin
 uses that remote-tracking branch as the base for the local checkout. If no local
 or remote branch exists, pass `--base REF` explicitly to create the branch from
-that ref.
+that ref. Each created worktree receives its own focused Herdr workspace.
 
 Bind that action to a simple key in your Herdr config:
 

@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   assertConductorCompatibility,
   branchWorkspaceSlug,
+  buildHerdrWorkspaceCreateCommand,
+  buildHerdrWorktreeCreateCommand,
   buildConductorArchiveSql,
   buildConductorRegistrationSql,
   buildSyncCandidates,
@@ -26,6 +28,49 @@ test("slugify normalizes names for branch and path usage", () => {
 test("branchWorkspaceSlug derives safe workspace names from branches", () => {
   assert.equal(branchWorkspaceSlug("peter/feature-v2"), "peter-feature-v2");
   assert.equal(branchWorkspaceSlug("peter/feature-v2", "Trial Workspace"), "trial-workspace");
+});
+
+test("create flow creates a dedicated focused workspace for the new worktree", () => {
+  assert.deepEqual(
+    buildHerdrWorktreeCreateCommand({
+      repo: "/repos/noise-platform",
+      slug: "pr-42-feature",
+      branch: "review/pr-42-feature",
+      base: "refs/gh-dash/pr-42",
+      targetPath: "/conductor/workspaces/noise-platform/pr-42-feature",
+    }),
+    [
+      "worktree",
+      "create",
+      "--cwd",
+      "/repos/noise-platform",
+      "--branch",
+      "review/pr-42-feature",
+      "--base",
+      "refs/gh-dash/pr-42",
+      "--path",
+      "/conductor/workspaces/noise-platform/pr-42-feature",
+      "--label",
+      "pr-42-feature",
+      "--no-focus",
+      "--json",
+    ],
+  );
+  assert.deepEqual(
+    buildHerdrWorkspaceCreateCommand(
+      "/conductor/workspaces/noise-platform/pr-42-feature",
+      "pr-42-feature",
+    ),
+    [
+      "workspace",
+      "create",
+      "--cwd",
+      "/conductor/workspaces/noise-platform/pr-42-feature",
+      "--label",
+      "pr-42-feature",
+      "--focus",
+    ],
+  );
 });
 
 test("timestampSlug uses stable local timestamp formatting", () => {

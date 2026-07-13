@@ -258,13 +258,12 @@ function worktreeIsClean(worktreePath) {
 function herdrBin() {
   return process.env.HERDR_BIN_PATH || "herdr";
 }
-function createWorktree({
+function buildHerdrWorktreeCreateCommand({
   repo,
   slug,
   branch,
   base,
-  targetPath,
-  dryRun
+  targetPath
 }) {
   const command = [
     "worktree",
@@ -277,7 +276,40 @@ function createWorktree({
   if (base) {
     command.push("--base", base);
   }
-  command.push("--path", targetPath, "--label", slug, "--focus", "--json");
+  command.push("--path", targetPath, "--label", slug, "--no-focus", "--json");
+  return command;
+}
+function buildHerdrWorkspaceCreateCommand(targetPath, slug) {
+  return ["workspace", "create", "--cwd", targetPath, "--label", slug, "--focus"];
+}
+function createWorktree({
+  repo,
+  slug,
+  branch,
+  base,
+  targetPath,
+  dryRun
+}) {
+  const command = buildHerdrWorktreeCreateCommand({ repo, slug, branch, base, targetPath });
+  if (dryRun) {
+    log(`dry-run: ${herdrBin()} ${command.map((part) => JSON.stringify(part)).join(" ")}`);
+    return;
+  }
+  const result = run(herdrBin(), command);
+  if (!result.ok) {
+    die(result.err || result.out || `herdr ${command.join(" ")} failed`);
+  }
+  if (result.out) {
+    process.stdout.write(`${result.out}
+`);
+  }
+}
+function createHerdrWorkspace({
+  slug,
+  targetPath,
+  dryRun
+}) {
+  const command = buildHerdrWorkspaceCreateCommand(targetPath, slug);
   if (dryRun) {
     log(`dry-run: ${herdrBin()} ${command.map((part) => JSON.stringify(part)).join(" ")}`);
     return;
@@ -965,6 +997,7 @@ function createCommand(args) {
     log(`base: ${base}`);
   log(`path: ${targetPath}`);
   createWorktree({ repo, slug, branch, base, targetPath, dryRun: args.dryRun });
+  createHerdrWorkspace({ slug, targetPath, dryRun: args.dryRun });
   if (args.registerConductor) {
     if (args.dryRun) {
       log("dry-run: skipped Conductor DB registration");
@@ -1485,6 +1518,8 @@ export {
   conductorPath,
   chooseConductorRepo,
   buildSyncCandidates,
+  buildHerdrWorktreeCreateCommand,
+  buildHerdrWorkspaceCreateCommand,
   buildConductorRegistrationSql,
   buildConductorArchiveSql,
   branchWorkspaceSlug,

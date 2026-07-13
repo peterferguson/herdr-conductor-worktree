@@ -413,21 +413,19 @@ function herdrBin(): string {
   return process.env.HERDR_BIN_PATH || "herdr";
 }
 
-function createWorktree({
+export function buildHerdrWorktreeCreateCommand({
   repo,
   slug,
   branch,
   base,
   targetPath,
-  dryRun,
 }: {
   repo: string;
   slug: string;
   branch: string;
   base?: string;
   targetPath: string;
-  dryRun: boolean;
-}): void {
+}): string[] {
   const command = [
     "worktree",
     "create",
@@ -444,9 +442,58 @@ function createWorktree({
     targetPath,
     "--label",
     slug,
-    "--focus",
+    "--no-focus",
     "--json",
   );
+  return command;
+}
+
+export function buildHerdrWorkspaceCreateCommand(targetPath: string, slug: string): string[] {
+  return ["workspace", "create", "--cwd", targetPath, "--label", slug, "--focus"];
+}
+
+function createWorktree({
+  repo,
+  slug,
+  branch,
+  base,
+  targetPath,
+  dryRun,
+}: {
+  repo: string;
+  slug: string;
+  branch: string;
+  base?: string;
+  targetPath: string;
+  dryRun: boolean;
+}): void {
+  const command = buildHerdrWorktreeCreateCommand({ repo, slug, branch, base, targetPath });
+
+  if (dryRun) {
+    log(`dry-run: ${herdrBin()} ${command.map((part) => JSON.stringify(part)).join(" ")}`);
+    return;
+  }
+
+  const result = run(herdrBin(), command);
+  if (!result.ok) {
+    die(result.err || result.out || `herdr ${command.join(" ")} failed`);
+  }
+
+  if (result.out) {
+    process.stdout.write(`${result.out}\n`);
+  }
+}
+
+function createHerdrWorkspace({
+  slug,
+  targetPath,
+  dryRun,
+}: {
+  slug: string;
+  targetPath: string;
+  dryRun: boolean;
+}): void {
+  const command = buildHerdrWorkspaceCreateCommand(targetPath, slug);
 
   if (dryRun) {
     log(`dry-run: ${herdrBin()} ${command.map((part) => JSON.stringify(part)).join(" ")}`);
@@ -1248,6 +1295,7 @@ function createCommand(args: CliArgs): void {
   log(`path: ${targetPath}`);
 
   createWorktree({ repo, slug, branch, base, targetPath, dryRun: args.dryRun });
+  createHerdrWorkspace({ slug, targetPath, dryRun: args.dryRun });
 
   if (args.registerConductor) {
     if (args.dryRun) {
