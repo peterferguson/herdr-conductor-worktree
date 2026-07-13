@@ -184,9 +184,9 @@ existing registration fields used by this plugin are unchanged, so the plugin
 treats `0.70.0` / migration `114` as compatible with the `0.69.1` / migration
 `113` baseline.
 
-Conductor `0.73.3` was later verified against migration `115`, whose workspace
-assignee/watcher columns remain nullable and do not change this plugin's
-registration or archive writes.
+Conductor `0.73.3` and `0.74.0` were later verified against migration `115`,
+whose workspace assignee/watcher columns remain nullable and do not change this
+plugin's registration or archive writes.
 
 Conductor did not display a directly inserted workspace until the app was
 restarted. Treat this as expected behavior for now: direct database writes are

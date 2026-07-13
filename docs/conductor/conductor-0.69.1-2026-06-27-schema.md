@@ -11,7 +11,7 @@ migration count: 113
 ```
 
 Later verified as compatible with Conductor `0.70.0` and `0.71.1`, both at max
-migration `114`, and Conductor `0.72.0`, `0.73.0`, and `0.73.3` at max
+migration `114`, and Conductor `0.72.0`, `0.73.0`, `0.73.3`, and `0.74.0` at max
 migration `115`.
 Migration `114` is `track owning organization for cloud workspaces`; it adds
 nullable `workspaces.organization_id` plus an index. Migration `115` is `track
